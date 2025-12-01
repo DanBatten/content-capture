@@ -7,11 +7,21 @@ let _pubsub: PubSub | null = null;
 function getPubSubClient(): PubSub {
   if (_pubsub) return _pubsub;
 
-  // Uses GOOGLE_APPLICATION_CREDENTIALS env var for auth
-  // Or defaults to Application Default Credentials on GCP
-  _pubsub = new PubSub({
-    projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
-  });
+  const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
+
+  // Check for JSON credentials (for Vercel/serverless deployment)
+  const credentialsJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
+  if (credentialsJson) {
+    const credentials = JSON.parse(credentialsJson);
+    _pubsub = new PubSub({
+      projectId,
+      credentials,
+    });
+  } else {
+    // Uses GOOGLE_APPLICATION_CREDENTIALS env var for auth (local dev)
+    // Or defaults to Application Default Credentials on GCP
+    _pubsub = new PubSub({ projectId });
+  }
 
   return _pubsub;
 }
