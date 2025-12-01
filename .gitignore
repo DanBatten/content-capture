@@ -41,3 +41,5 @@ Pods/
 *.tsbuildinfo
 
 .gcs/functions/process-capture/.env.deploy
+.gcs/
+functions/process-capture/.env.deploy
