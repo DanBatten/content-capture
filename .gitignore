@@ -40,4 +40,4 @@ Pods/
 .vercel
 *.tsbuildinfo
 
-.gcs/
+.gcs/functions/process-capture/.env.deploy
