@@ -1,0 +1,25 @@
+{
+  "name": "process-capture",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "node build.mjs",
+    "deploy": "npm run build && gcloud functions deploy process-capture --runtime nodejs20 --trigger-topic content-capture-process --entry-point processCapture --region us-central1 --set-env-vars \"$(cat .env.deploy 2>/dev/null || echo '')\" --source dist --memory 512MB --timeout 300s",
+    "logs": "gcloud functions logs read process-capture --region us-central1"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.1",
+    "@google-cloud/functions-framework": "^3.4.2",
+    "@google-cloud/storage": "^7.14.0",
+    "@supabase/supabase-js": "^2.47.10",
+    "apify-client": "^2.11.0",
+    "cheerio": "^1.0.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "esbuild": "^0.24.2",
+    "typescript": "^5.7.2"
+  }
+}
