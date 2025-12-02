@@ -7,16 +7,82 @@ const TWITTER_URL_PATTERNS = [
   /^https?:\/\/(www\.)?(twitter|x)\.com\/\w+$/i,
 ];
 
+// FxTwitter API response interface
+interface FxTwitterResponse {
+  code: number;
+  message: string;
+  tweet?: {
+    url: string;
+    id: string;
+    text: string;
+    author: {
+      id: string;
+      name: string;
+      screen_name: string;
+      avatar_url?: string;
+      banner_url?: string;
+      description?: string;
+      location?: string;
+      followers?: number;
+      following?: number;
+      joined?: string;
+      tweets?: number;
+    };
+    replies?: number;
+    retweets?: number;
+    likes?: number;
+    bookmarks?: number;
+    created_at?: string;
+    created_timestamp?: number;
+    views?: number;
+    lang?: string;
+    replying_to?: string;
+    replying_to_status?: string;
+    media?: {
+      photos?: Array<{
+        url: string;
+        width?: number;
+        height?: number;
+      }>;
+      videos?: Array<{
+        url: string;
+        thumbnail_url?: string;
+        duration?: number;
+        width?: number;
+        height?: number;
+      }>;
+    };
+  };
+}
+
+// Different Apify actors return different data formats
 interface ApifyTweetResult {
   id?: string;
+  id_str?: string;
+  tweetId?: string;
+  rest_id?: string;
   text?: string;
   full_text?: string;
+  rawContent?: string;
+  content?: string;
   created_at?: string;
+  createdAt?: string;
+  date?: string;
   user?: {
     name?: string;
     screen_name?: string;
     profile_image_url_https?: string;
   };
+  author?: {
+    userName?: string;
+    displayName?: string;
+    profileImageUrl?: string;
+  };
+  userName?: string;
+  displayName?: string;
+  authorName?: string;
+  authorHandle?: string;
+  profileImageUrl?: string;
   entities?: {
     media?: Array<{
       media_url_https?: string;
@@ -29,9 +95,6 @@ interface ApifyTweetResult {
           content_type?: string;
         }>;
       };
-    }>;
-    urls?: Array<{
-      expanded_url?: string;
     }>;
   };
   extended_entities?: {
@@ -48,24 +111,35 @@ interface ApifyTweetResult {
       };
     }>;
   };
+  media?: Array<{
+    url?: string;
+    type?: string;
+    thumbnailUrl?: string;
+    duration?: number;
+  }>;
+  photos?: Array<{ url?: string }>;
+  videos?: Array<{ url?: string; thumbnailUrl?: string; duration?: number }>;
   retweet_count?: number;
+  retweetCount?: number;
   favorite_count?: number;
+  likeCount?: number;
   reply_count?: number;
+  replyCount?: number;
 }
 
 /**
- * Twitter/X scraper using Apify actor
+ * Twitter/X scraper using FxTwitter API (primary) with Apify fallback
  */
 export class TwitterScraper implements ContentScraper {
   name = 'twitter';
-  private client: ApifyClient;
+  private client: ApifyClient | null = null;
 
   constructor(apiToken?: string) {
+    // Apify is optional now - FxTwitter is our primary method
     const token = apiToken || process.env.APIFY_API_TOKEN;
-    if (!token) {
-      throw new Error('Apify API token is required for Twitter scraper');
+    if (token) {
+      this.client = new ApifyClient({ token });
     }
-    this.client = new ApifyClient({ token });
   }
 
   canHandle(url: string): boolean {
@@ -73,57 +147,341 @@ export class TwitterScraper implements ContentScraper {
   }
 
   async scrape(url: string, options?: ScraperOptions): Promise<ExtractedContent> {
-    const timeout = options?.timeout || 60000;
-
-    // Use Apify's Twitter Scraper actor
-    // Actor ID: apidojo/tweet-scraper or similar
-    const run = await this.client.actor('apidojo/tweet-scraper').call(
-      {
-        startUrls: [{ url }],
-        maxTweets: 1,
-        addUserInfo: true,
-        proxyConfiguration: {
-          useApifyProxy: true,
-        },
-      },
-      {
-        timeout: timeout / 1000, // Apify uses seconds
-        waitSecs: 10,
-      }
-    );
-
-    // Get results from dataset
-    const { items } = await this.client.dataset(run.defaultDatasetId).listItems();
-
-    if (!items || items.length === 0) {
-      throw new Error('No tweet data returned from Apify');
+    // Extract username and tweet ID from URL
+    const match = url.match(/(?:twitter|x)\.com\/(\w+)\/status\/(\d+)/i);
+    if (!match) {
+      throw new Error('Invalid Twitter/X URL format');
     }
 
-    const tweet = items[0] as ApifyTweetResult;
-    return this.parseTweet(tweet);
+    const username = match[1] as string;
+    const tweetId = match[2] as string;
+    const errors: string[] = [];
+
+    // Try FxTwitter API first (free, reliable)
+    try {
+      console.log(`Trying FxTwitter API for tweet ${tweetId}`);
+      const result = await this.fetchFromFxTwitter(username, tweetId);
+      if (result) {
+        console.log('SUCCESS: FxTwitter API returned valid tweet data');
+        return result;
+      }
+    } catch (err) {
+      const errMsg = `FxTwitter failed: ${err instanceof Error ? err.message : String(err)}`;
+      console.warn(errMsg);
+      errors.push(errMsg);
+    }
+
+    // Try VxTwitter API as backup
+    try {
+      console.log(`Trying VxTwitter API for tweet ${tweetId}`);
+      const result = await this.fetchFromVxTwitter(username, tweetId);
+      if (result) {
+        console.log('SUCCESS: VxTwitter API returned valid tweet data');
+        return result;
+      }
+    } catch (err) {
+      const errMsg = `VxTwitter failed: ${err instanceof Error ? err.message : String(err)}`;
+      console.warn(errMsg);
+      errors.push(errMsg);
+    }
+
+    // Fallback to Apify if available
+    if (this.client) {
+      try {
+        console.log('Trying Apify actors as fallback');
+        const result = await this.fetchFromApify(url, tweetId, options?.timeout);
+        if (result) {
+          console.log('SUCCESS: Apify returned valid tweet data');
+          return result;
+        }
+      } catch (err) {
+        const errMsg = `Apify failed: ${err instanceof Error ? err.message : String(err)}`;
+        console.warn(errMsg);
+        errors.push(errMsg);
+      }
+    }
+
+    throw new Error(`No tweet data returned. Errors: ${errors.join('; ')}`);
   }
 
-  private parseTweet(tweet: ApifyTweetResult): ExtractedContent {
-    const text = tweet.full_text || tweet.text || '';
-    const user = tweet.user;
+  /**
+   * Fetch tweet from FxTwitter API (free, no auth required)
+   */
+  private async fetchFromFxTwitter(username: string, tweetId: string): Promise<ExtractedContent | null> {
+    const apiUrl = `https://api.fxtwitter.com/${username}/status/${tweetId}`;
+
+    const response = await fetch(apiUrl, {
+      headers: { Accept: 'application/json' },
+    });
+
+    if (!response.ok) {
+      throw new Error(`FxTwitter API returned ${response.status}`);
+    }
+
+    const data = (await response.json()) as FxTwitterResponse;
+
+    if (data.code !== 200 || !data.tweet) {
+      throw new Error(data.message || 'Tweet not found');
+    }
+
+    const tweet = data.tweet;
 
     // Extract images
     const images: MediaItem[] = [];
-    const mediaEntities = tweet.extended_entities?.media || tweet.entities?.media || [];
-
-    for (const media of mediaEntities) {
-      if (media.type === 'photo' && media.media_url_https) {
-        images.push({
-          url: media.media_url_https,
-        });
+    if (tweet.media?.photos) {
+      for (const photo of tweet.media.photos) {
+        images.push({ url: photo.url });
       }
     }
 
     // Extract videos
     const videos: VideoItem[] = [];
+    if (tweet.media?.videos) {
+      for (const video of tweet.media.videos) {
+        videos.push({
+          url: video.url,
+          thumbnail: video.thumbnail_url,
+          duration: video.duration,
+        });
+      }
+    }
+
+    // Parse date
+    let publishedAt: string | undefined;
+    if (tweet.created_at) {
+      try {
+        publishedAt = new Date(tweet.created_at).toISOString();
+      } catch {
+        // Invalid date
+      }
+    } else if (tweet.created_timestamp) {
+      publishedAt = new Date(tweet.created_timestamp * 1000).toISOString();
+    }
+
+    return {
+      title: tweet.text.slice(0, 100) + (tweet.text.length > 100 ? '...' : ''),
+      description: tweet.text,
+      bodyText: tweet.text,
+      authorName: tweet.author.name,
+      authorHandle: `@${tweet.author.screen_name}`,
+      publishedAt,
+      images,
+      videos,
+      platformData: {
+        tweetId: tweet.id,
+        retweetCount: tweet.retweets,
+        likeCount: tweet.likes,
+        replyCount: tweet.replies,
+        viewCount: tweet.views,
+        bookmarkCount: tweet.bookmarks,
+        profileImageUrl: tweet.author.avatar_url,
+      },
+    };
+  }
+
+  /**
+   * Fetch tweet from VxTwitter API (free backup)
+   */
+  private async fetchFromVxTwitter(username: string, tweetId: string): Promise<ExtractedContent | null> {
+    const apiUrl = `https://api.vxtwitter.com/${username}/status/${tweetId}`;
+
+    const response = await fetch(apiUrl, {
+      headers: { Accept: 'application/json' },
+    });
+
+    if (!response.ok) {
+      throw new Error(`VxTwitter API returned ${response.status}`);
+    }
+
+    const text = await response.text();
+
+    // VxTwitter sometimes returns HTML instead of JSON
+    if (text.startsWith('<!DOCTYPE') || text.startsWith('<html')) {
+      throw new Error('VxTwitter returned HTML instead of JSON');
+    }
+
+    const data = JSON.parse(text);
+
+    if (!data.tweetID) {
+      throw new Error('Tweet not found');
+    }
+
+    // Extract images
+    const images: MediaItem[] = [];
+    if (data.mediaURLs?.length > 0) {
+      for (const url of data.mediaURLs) {
+        // Only add images, not videos
+        if (!url.includes('.mp4') && !url.includes('/video/')) {
+          images.push({ url });
+        }
+      }
+    }
+
+    // Extract videos
+    const videos: VideoItem[] = [];
+    if (data.media_extended?.length > 0) {
+      for (const media of data.media_extended) {
+        if (media.type === 'video' && media.url) {
+          videos.push({
+            url: media.url,
+            thumbnail: media.thumbnail_url,
+            duration: media.duration_millis ? media.duration_millis / 1000 : undefined,
+          });
+        }
+      }
+    }
+
+    // Parse date
+    let publishedAt: string | undefined;
+    if (data.date) {
+      try {
+        publishedAt = new Date(data.date).toISOString();
+      } catch {
+        // Invalid date
+      }
+    } else if (data.date_epoch) {
+      publishedAt = new Date(data.date_epoch * 1000).toISOString();
+    }
+
+    return {
+      title: data.text.slice(0, 100) + (data.text.length > 100 ? '...' : ''),
+      description: data.text,
+      bodyText: data.text,
+      authorName: data.user_name,
+      authorHandle: `@${data.user_screen_name}`,
+      publishedAt,
+      images,
+      videos,
+      platformData: {
+        tweetId: data.tweetID,
+        retweetCount: data.retweets,
+        likeCount: data.likes,
+        replyCount: data.replies,
+        profileImageUrl: data.user_profile_image_url,
+      },
+    };
+  }
+
+  /**
+   * Fallback to Apify actors
+   */
+  private async fetchFromApify(
+    url: string,
+    tweetId: string,
+    timeout?: number
+  ): Promise<ExtractedContent | null> {
+    if (!this.client) {
+      throw new Error('Apify client not configured');
+    }
+
+    const xUrl = url.replace('twitter.com', 'x.com');
+    const timeoutSec = (timeout || 120000) / 1000;
+
+    const actors = [
+      {
+        id: 'apidojo/tweet-scraper',
+        input: { tweetIDs: [tweetId], maxItems: 1, addUserInfo: true },
+      },
+      {
+        id: 'apidojo/twitter-scraper-lite',
+        input: { tweetIDs: [tweetId], maxItems: 1 },
+      },
+      {
+        id: 'xtdata/twitter-x-scraper',
+        input: { tweetIds: [tweetId], maxItems: 1 },
+      },
+    ];
+
+    for (const actor of actors) {
+      try {
+        console.log(`Trying Apify actor: ${actor.id}`);
+
+        const run = await this.client.actor(actor.id).call(actor.input, {
+          timeout: timeoutSec,
+          waitSecs: 60,
+        });
+
+        const { items } = await this.client.dataset(run.defaultDatasetId).listItems();
+
+        if (items?.length > 0) {
+          const tweet = items[0] as ApifyTweetResult;
+          const result = this.parseApifyTweet(tweet, url);
+
+          if (this.isValidTweetData(result)) {
+            return result;
+          }
+        }
+      } catch (err) {
+        console.warn(`Actor ${actor.id} failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+
+    return null;
+  }
+
+  private isValidTweetData(result: ExtractedContent): boolean {
+    const text = result.bodyText || result.description || '';
+
+    const invalidPatterns = [
+      /KaitoEasyAPI/i,
+      /Our API pricing is based on/i,
+      /From .+, a reminder:/i,
+      /mock_tweet/i,
+      /This is a sample/i,
+      /test tweet/i,
+    ];
+
+    for (const pattern of invalidPatterns) {
+      if (pattern.test(text)) {
+        return false;
+      }
+    }
+
+    return text.length >= 5;
+  }
+
+  private parseApifyTweet(tweet: ApifyTweetResult, originalUrl?: string): ExtractedContent {
+    const text = tweet.full_text || tweet.text || tweet.rawContent || tweet.content || '';
+
+    const userName =
+      tweet.user?.screen_name ||
+      tweet.author?.userName ||
+      tweet.userName ||
+      tweet.authorHandle?.replace('@', '');
+    const displayName =
+      tweet.user?.name || tweet.author?.displayName || tweet.displayName || tweet.authorName;
+    const profileImage =
+      tweet.user?.profile_image_url_https ||
+      tweet.author?.profileImageUrl ||
+      tweet.profileImageUrl;
+
+    const images: MediaItem[] = [];
+    const mediaEntities = tweet.extended_entities?.media || tweet.entities?.media || [];
+    for (const media of mediaEntities) {
+      if (media.type === 'photo' && media.media_url_https) {
+        images.push({ url: media.media_url_https });
+      }
+    }
+
+    if (tweet.media) {
+      for (const media of tweet.media) {
+        if (media.type === 'photo' && media.url && !images.some((i) => i.url === media.url)) {
+          images.push({ url: media.url });
+        }
+      }
+    }
+
+    if (tweet.photos) {
+      for (const photo of tweet.photos) {
+        if (photo.url && !images.some((i) => i.url === photo.url)) {
+          images.push({ url: photo.url });
+        }
+      }
+    }
+
+    const videos: VideoItem[] = [];
     for (const media of mediaEntities) {
       if ((media.type === 'video' || media.type === 'animated_gif') && media.video_info) {
-        // Get highest quality video variant
         const variants = media.video_info.variants || [];
         const mp4Variants = variants.filter((v) => v.content_type === 'video/mp4');
         const bestVariant = mp4Variants.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))[0];
@@ -140,31 +498,60 @@ export class TwitterScraper implements ContentScraper {
       }
     }
 
-    // Parse published date
-    let publishedAt: string | undefined;
-    if (tweet.created_at) {
-      try {
-        publishedAt = new Date(tweet.created_at).toISOString();
-      } catch {
-        // Invalid date format
+    if (tweet.media) {
+      for (const media of tweet.media) {
+        if (media.type === 'video' && media.url && !videos.some((v) => v.url === media.url)) {
+          videos.push({
+            url: media.url,
+            thumbnail: media.thumbnailUrl,
+            duration: media.duration,
+          });
+        }
       }
     }
+
+    if (tweet.videos) {
+      for (const video of tweet.videos) {
+        if (video.url && !videos.some((v) => v.url === video.url)) {
+          videos.push({
+            url: video.url,
+            thumbnail: video.thumbnailUrl,
+            duration: video.duration,
+          });
+        }
+      }
+    }
+
+    let publishedAt: string | undefined;
+    const dateStr = tweet.created_at || tweet.createdAt || tweet.date;
+    if (dateStr) {
+      try {
+        publishedAt = new Date(dateStr).toISOString();
+      } catch {
+        // Invalid date
+      }
+    }
+
+    const tweetId = tweet.id || tweet.id_str || tweet.tweetId || tweet.rest_id;
+    const retweetCount = tweet.retweet_count ?? tweet.retweetCount;
+    const likeCount = tweet.favorite_count ?? tweet.likeCount;
+    const replyCount = tweet.reply_count ?? tweet.replyCount;
 
     return {
       title: text.slice(0, 100) + (text.length > 100 ? '...' : ''),
       description: text,
       bodyText: text,
-      authorName: user?.name,
-      authorHandle: user?.screen_name ? `@${user.screen_name}` : undefined,
+      authorName: displayName,
+      authorHandle: userName ? `@${userName}` : undefined,
       publishedAt,
       images,
       videos,
       platformData: {
-        tweetId: tweet.id,
-        retweetCount: tweet.retweet_count,
-        likeCount: tweet.favorite_count,
-        replyCount: tweet.reply_count,
-        profileImageUrl: user?.profile_image_url_https,
+        tweetId,
+        retweetCount,
+        likeCount,
+        replyCount,
+        profileImageUrl: profileImage,
       },
     };
   }

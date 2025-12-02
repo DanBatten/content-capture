@@ -1,3 +1,4 @@
+import * as functions from '@google-cloud/functions-framework';
 import { CloudEvent } from '@google-cloud/functions-framework';
 import { createClient } from '@supabase/supabase-js';
 import { Storage } from '@google-cloud/storage';
@@ -18,9 +19,17 @@ const bucketName = process.env.GCS_BUCKET_NAME || 'content-capture-media';
 const scraperRegistry = createScraperRegistry();
 const analyzer = createAnalyzer();
 
-interface PubSubMessage {
-  data: string;
+interface PubSubData {
+  // Gen2 Eventarc format - data is at root level with snake_case keys
+  data?: string;
   attributes?: Record<string, string>;
+  message_id?: string;
+  publish_time?: string;
+  // Gen1 format - nested in message
+  message?: {
+    data: string;
+    attributes?: Record<string, string>;
+  };
 }
 
 /**
@@ -28,16 +37,40 @@ interface PubSubMessage {
  * Processes captured URLs: scrape → analyze → store
  */
 export async function processCapture(
-  cloudEvent: CloudEvent<PubSubMessage>
+  cloudEvent: CloudEvent<PubSubData>
 ): Promise<void> {
   const startTime = Date.now();
 
-  // Decode the Pub/Sub message
-  const messageData = cloudEvent.data?.data;
+  // Gen2 Eventarc with Pub/Sub sends the message data directly in cloudEvent.data
+  // The structure is: { data: "base64string", message_id: "...", publish_time: "..." }
+  // where cloudEvent.data.data is the actual base64-encoded message payload
+  const eventData = cloudEvent.data;
+
+  // Log for debugging
+  console.log('CloudEvent received. Keys:', Object.keys(eventData || {}));
+
+  // In Gen2, the base64 data is at cloudEvent.data.data
+  // Cast to any to access the property directly
+  const rawData = eventData as any;
+  let messageData: string | undefined;
+
+  if (typeof rawData === 'string') {
+    // Data is directly a string (unlikely but handle it)
+    messageData = rawData;
+  } else if (rawData && typeof rawData.data === 'string') {
+    // Gen2 format: { data: "base64...", message_id: ... }
+    messageData = rawData.data;
+  } else if (rawData?.message?.data) {
+    // Gen1 format: { message: { data: "base64..." } }
+    messageData = rawData.message.data;
+  }
+
   if (!messageData) {
-    console.error('No message data received');
+    console.error('No message data found. eventData type:', typeof eventData, 'eventData:', JSON.stringify(eventData, null, 2));
     return;
   }
+
+  console.log('Decoding message, length:', messageData.length);
 
   const message: CaptureMessage = JSON.parse(
     Buffer.from(messageData, 'base64').toString('utf-8')
@@ -254,4 +287,7 @@ async function saveToDatabase(
     throw new Error(`Database save failed: ${error.message}`);
   }
 }
+
+// Register the function with the Functions Framework for Gen2
+functions.cloudEvent('processCapture', processCapture);
 
