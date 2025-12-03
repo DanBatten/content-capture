@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ContentItem } from '@/types/content';
 
 interface ContentModalProps {
@@ -68,6 +68,169 @@ function getDomain(url: string): string {
 function getImageUrl(image: { url?: string; publicUrl?: string; originalUrl?: string } | undefined): string | null {
   if (!image) return null;
   return image.publicUrl || image.originalUrl || image.url || null;
+}
+
+// Image Gallery component with swipe support
+function ImageGallery({ images, videos }: {
+  images?: ContentItem['images'];
+  videos?: ContentItem['videos'];
+}) {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+
+  // Combine video (first) with images for gallery
+  const mediaItems = useMemo(() => {
+    const items: Array<{ type: 'video' | 'image'; url: string; thumbnail?: string }> = [];
+
+    if (videos && videos.length > 0) {
+      videos.forEach(video => {
+        const url = video.originalUrl || video.url;
+        if (url) {
+          items.push({ type: 'video', url, thumbnail: video.thumbnail });
+        }
+      });
+    }
+
+    if (images && images.length > 0) {
+      images.forEach(image => {
+        const url = getImageUrl(image);
+        if (url) {
+          items.push({ type: 'image', url });
+        }
+      });
+    }
+
+    return items;
+  }, [images, videos]);
+
+  const totalItems = mediaItems.length;
+
+  // Minimum swipe distance (in px)
+  const minSwipeDistance = 50;
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+
+  const onTouchEnd = () => {
+    if (!touchStart || !touchEnd) return;
+
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > minSwipeDistance;
+    const isRightSwipe = distance < -minSwipeDistance;
+
+    if (isLeftSwipe && currentIndex < totalItems - 1) {
+      setCurrentIndex(prev => prev + 1);
+    }
+    if (isRightSwipe && currentIndex > 0) {
+      setCurrentIndex(prev => prev - 1);
+    }
+  };
+
+  const goToSlide = (index: number) => {
+    setCurrentIndex(index);
+  };
+
+  const goToPrev = () => {
+    if (currentIndex > 0) {
+      setCurrentIndex(prev => prev - 1);
+    }
+  };
+
+  const goToNext = () => {
+    if (currentIndex < totalItems - 1) {
+      setCurrentIndex(prev => prev + 1);
+    }
+  };
+
+  if (totalItems === 0) return null;
+
+  const currentItem = mediaItems[currentIndex];
+
+  return (
+    <div
+      className="relative w-full max-h-[50vh] bg-neutral-100 dark:bg-neutral-800 flex-shrink-0 overflow-hidden"
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+    >
+      {/* Media container with constrained height */}
+      <div className="relative w-full h-full flex items-center justify-center" style={{ maxHeight: '50vh' }}>
+        {currentItem.type === 'video' ? (
+          <video
+            key={currentItem.url}
+            src={currentItem.url}
+            poster={currentItem.thumbnail}
+            controls
+            className="max-w-full max-h-[50vh] object-contain"
+          />
+        ) : (
+          <img
+            key={currentItem.url}
+            src={currentItem.url}
+            alt={`Image ${currentIndex + 1}`}
+            className="max-w-full max-h-[50vh] object-contain"
+          />
+        )}
+      </div>
+
+      {/* Navigation arrows (only show if multiple items) */}
+      {totalItems > 1 && (
+        <>
+          {currentIndex > 0 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); goToPrev(); }}
+              className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/30 hover:bg-black/50 backdrop-blur-sm flex items-center justify-center text-white transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+          )}
+          {currentIndex < totalItems - 1 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); goToNext(); }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/30 hover:bg-black/50 backdrop-blur-sm flex items-center justify-center text-white transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          )}
+        </>
+      )}
+
+      {/* Dot indicators */}
+      {totalItems > 1 && (
+        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+          {mediaItems.map((_, index) => (
+            <button
+              key={index}
+              onClick={(e) => { e.stopPropagation(); goToSlide(index); }}
+              className={`w-2 h-2 rounded-full transition-all ${
+                index === currentIndex
+                  ? 'bg-white w-4'
+                  : 'bg-white/50 hover:bg-white/70'
+              }`}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Image counter badge */}
+      {totalItems > 1 && (
+        <div className="absolute top-3 right-3 px-2 py-1 rounded-full bg-black/30 backdrop-blur-sm text-white text-xs font-medium">
+          {currentIndex + 1} / {totalItems}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // Render text with clickable links
@@ -154,24 +317,9 @@ export function ContentModal({ item, onClose }: ContentModalProps) {
           </svg>
         </button>
 
-        {/* Media section */}
+        {/* Media section with swipeable gallery */}
         {(hasImage || hasVideo) && (
-          <div className="relative w-full aspect-video bg-neutral-100 dark:bg-neutral-800 flex-shrink-0">
-            {hasVideo && item.videos?.[0] ? (
-              <video
-                src={item.videos[0].originalUrl || item.videos[0].url}
-                poster={item.videos[0].thumbnail}
-                controls
-                className="w-full h-full object-contain"
-              />
-            ) : hasImage && item.images?.[0] ? (
-              <img
-                src={getImageUrl(item.images[0]) || ''}
-                alt={item.title || 'Content image'}
-                className="w-full h-full object-contain"
-              />
-            ) : null}
-          </div>
+          <ImageGallery images={item.images} videos={item.videos} />
         )}
 
         {/* Content section */}

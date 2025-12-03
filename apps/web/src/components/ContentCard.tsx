@@ -47,6 +47,8 @@ function getImageUrl(image: { url?: string; publicUrl?: string; originalUrl?: st
 export function ContentCard({ item, size = 'medium', onClick }: ContentCardProps) {
   const hasImage = item.images && item.images.length > 0;
   const hasVideo = item.videos && item.videos.length > 0;
+  const imageCount = item.images?.length || 0;
+  const hasMultipleImages = imageCount > 1;
 
   // Get thumbnail: prefer video thumbnail, then first image
   const thumbnail = hasVideo && item.videos?.[0]?.thumbnail
@@ -61,37 +63,50 @@ export function ContentCard({ item, size = 'medium', onClick }: ContentCardProps
     small: 'col-span-1 row-span-1',
   };
 
-  const heightClasses = {
-    large: 'min-h-[400px]',
-    medium: 'min-h-[280px]',
-    small: 'min-h-[200px]',
+  // Fixed aspect ratios for consistent image display
+  const aspectClasses = {
+    large: 'aspect-[4/3]',
+    medium: 'aspect-[4/3]',
+    small: 'aspect-[4/3]',
   };
 
   return (
     <article
-      className={`group relative rounded-2xl overflow-hidden cursor-pointer transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl ${sizeClasses[size]} ${heightClasses[size]}`}
+      className={`group flex flex-col rounded-2xl overflow-hidden cursor-pointer transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl bg-neutral-900 ${sizeClasses[size]}`}
       onClick={onClick}
     >
-      {/* Background */}
-      {thumbnail ? (
-        <div className="absolute inset-0">
-          <img
-            src={thumbnail}
-            alt={item.title || 'Content preview'}
-            className="w-full h-full object-cover"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
-        </div>
-      ) : (
-        <div className={`absolute inset-0 ${sourceColors[item.source_type] || 'bg-neutral-800'}`}>
-          <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent" />
-        </div>
-      )}
+      {/* Image section with fixed aspect ratio */}
+      <div className={`relative w-full ${aspectClasses[size]} flex-shrink-0`}>
+        {thumbnail ? (
+          <>
+            <img
+              src={thumbnail}
+              alt={item.title || 'Content preview'}
+              className="absolute inset-0 w-full h-full object-cover"
+            />
+            {/* Gallery indicator for multiple images */}
+            {hasMultipleImages && (
+              <div className="absolute bottom-3 right-3 flex gap-1">
+                {item.images!.slice(0, 4).map((img, idx) => (
+                  <div
+                    key={idx}
+                    className={`w-1.5 h-1.5 rounded-full ${idx === 0 ? 'bg-white' : 'bg-white/50'}`}
+                  />
+                ))}
+                {imageCount > 4 && (
+                  <span className="text-white/70 text-xs ml-1">+{imageCount - 4}</span>
+                )}
+              </div>
+            )}
+          </>
+        ) : (
+          <div className={`absolute inset-0 ${sourceColors[item.source_type] || 'bg-neutral-800'}`}>
+            <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent" />
+          </div>
+        )}
 
-      {/* Content */}
-      <div className="relative h-full flex flex-col justify-end p-5">
         {/* Source badge */}
-        <div className="absolute top-4 left-4 flex items-center gap-2">
+        <div className="absolute top-3 left-3">
           <span className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium ${sourceColors[item.source_type] || 'bg-neutral-700'}`}>
             {item.source_type === 'twitter' ? '𝕏' :
              item.source_type === 'instagram' ? 'IG' :
@@ -102,7 +117,7 @@ export function ContentCard({ item, size = 'medium', onClick }: ContentCardProps
 
         {/* Video indicator */}
         {hasVideo && (
-          <div className="absolute top-4 right-4">
+          <div className="absolute top-3 right-3">
             <span className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
               <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M8 5v14l11-7z" />
@@ -110,56 +125,53 @@ export function ContentCard({ item, size = 'medium', onClick }: ContentCardProps
             </span>
           </div>
         )}
-
-        {/* Text content */}
-        <div className="space-y-2">
-          {/* Author */}
-          {(item.author_name || item.author_handle) && (
-            <p className="text-white/70 text-sm font-medium">
-              {item.author_name}
-              {item.author_handle && (
-                <span className="text-white/50 ml-1">{item.author_handle}</span>
-              )}
-            </p>
-          )}
-
-          {/* Title */}
-          <h3 className={`text-white font-semibold leading-tight ${
-            size === 'large' ? 'text-xl' : size === 'medium' ? 'text-base' : 'text-sm'
-          }`}>
-            {item.title || item.description?.slice(0, 100) || 'Untitled'}
-          </h3>
-
-          {/* Summary (large cards only) */}
-          {size === 'large' && item.summary && (
-            <p className="text-white/70 text-sm line-clamp-2">
-              {item.summary}
-            </p>
-          )}
-
-          {/* Topics - color coded */}
-          {item.topics && item.topics.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 pt-2">
-              {item.topics.slice(0, size === 'large' ? 4 : 2).map((topic) => (
-                <span
-                  key={topic}
-                  className={`px-2 py-0.5 backdrop-blur-sm rounded-full text-xs font-medium ${getTopicColor(topic)}`}
-                >
-                  {topic}
-                </span>
-              ))}
-              {item.topics.length > (size === 'large' ? 4 : 2) && (
-                <span className="px-2 py-0.5 text-white/60 text-xs">
-                  +{item.topics.length - (size === 'large' ? 4 : 2)}
-                </span>
-              )}
-            </div>
-          )}
-        </div>
       </div>
 
-      {/* Hover overlay */}
-      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
+      {/* Text content section - fixed height */}
+      <div className={`flex flex-col p-4 ${size === 'large' ? 'gap-2' : 'gap-1.5'}`}>
+        {/* Author */}
+        {(item.author_name || item.author_handle) && (
+          <p className="text-neutral-400 text-sm font-medium truncate">
+            {item.author_name}
+            {item.author_handle && (
+              <span className="text-neutral-500 ml-1">{item.author_handle}</span>
+            )}
+          </p>
+        )}
+
+        {/* Title */}
+        <h3 className={`text-white font-semibold leading-tight line-clamp-2 ${
+          size === 'large' ? 'text-lg' : 'text-sm'
+        }`}>
+          {item.title || item.description?.slice(0, 100) || 'Untitled'}
+        </h3>
+
+        {/* Summary (large cards only) */}
+        {size === 'large' && item.summary && (
+          <p className="text-neutral-400 text-sm line-clamp-2">
+            {item.summary}
+          </p>
+        )}
+
+        {/* Topics - color coded */}
+        {item.topics && item.topics.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mt-auto pt-2">
+            {item.topics.slice(0, size === 'large' ? 4 : 2).map((topic) => (
+              <span
+                key={topic}
+                className={`px-2 py-0.5 rounded-full text-xs font-medium ${getTopicColor(topic)}`}
+              >
+                {topic}
+              </span>
+            ))}
+            {item.topics.length > (size === 'large' ? 4 : 2) && (
+              <span className="px-2 py-0.5 text-neutral-500 text-xs">
+                +{item.topics.length - (size === 'large' ? 4 : 2)}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
     </article>
   );
 }
