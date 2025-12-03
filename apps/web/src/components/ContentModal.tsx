@@ -16,20 +16,23 @@ const sourceColors: Record<string, string> = {
   web: 'bg-[var(--accent)]',
 };
 
-// Muted, warm topic colors
+// Vibrant topic colors
 const topicColors = [
-  { bg: 'bg-[#8B7355]/20', text: 'text-[#5C4D3C]' },
-  { bg: 'bg-[#6B8E7B]/20', text: 'text-[#4A6354]' },
-  { bg: 'bg-[#9B8B7B]/20', text: 'text-[#6B5B4B]' },
-  { bg: 'bg-[#7B8B9B]/20', text: 'text-[#4B5B6B]' },
-  { bg: 'bg-[#A89080]/20', text: 'text-[#786050]' },
-  { bg: 'bg-[#8B9B7B]/20', text: 'text-[#5B6B4B]' },
+  { bg: 'bg-violet-500', text: 'text-white' },
+  { bg: 'bg-emerald-500', text: 'text-white' },
+  { bg: 'bg-amber-500', text: 'text-white' },
+  { bg: 'bg-rose-500', text: 'text-white' },
+  { bg: 'bg-cyan-500', text: 'text-white' },
+  { bg: 'bg-fuchsia-500', text: 'text-white' },
+  { bg: 'bg-lime-500', text: 'text-white' },
+  { bg: 'bg-orange-500', text: 'text-white' },
 ];
 
 const useCaseColors = [
-  { bg: 'bg-[#7B8B9B]/20', text: 'text-[#4B5B6B]' },
-  { bg: 'bg-[#8B7B9B]/20', text: 'text-[#5B4B6B]' },
-  { bg: 'bg-[#9B7B8B]/20', text: 'text-[#6B4B5B]' },
+  { bg: 'bg-blue-500', text: 'text-white' },
+  { bg: 'bg-indigo-500', text: 'text-white' },
+  { bg: 'bg-sky-500', text: 'text-white' },
+  { bg: 'bg-teal-500', text: 'text-white' },
 ];
 
 function getTagColor(tag: string, colors: typeof topicColors): typeof topicColors[0] {
@@ -392,7 +395,7 @@ export function ContentModal({ item, onClose }: ContentModalProps) {
                   return (
                     <span
                       key={topic}
-                      className={`px-3 py-1.5 ${color.bg} ${color.text} font-mono-ui text-xs rounded-full`}
+                      className={`px-3 py-1.5 ${color.bg} ${color.text} font-mono-ui text-xs`}
                     >
                       {topic}
                     </span>
@@ -412,7 +415,7 @@ export function ContentModal({ item, onClose }: ContentModalProps) {
                   return (
                     <span
                       key={useCase}
-                      className={`px-3 py-1.5 ${color.bg} ${color.text} font-mono-ui text-xs rounded-full`}
+                      className={`px-3 py-1.5 ${color.bg} ${color.text} font-mono-ui text-xs`}
                     >
                       {useCase}
                     </span>

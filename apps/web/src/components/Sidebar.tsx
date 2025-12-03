@@ -190,7 +190,7 @@ export function Sidebar({
                 {filters.disciplines.slice(0, 10).map(({ name }) => (
                   <span
                     key={name}
-                    className="px-3 py-1.5 bg-[var(--background)] text-[var(--foreground-muted)] font-mono-ui text-xs rounded-full"
+                    className="px-3 py-1.5 bg-[var(--background)] text-[var(--foreground-muted)] font-mono-ui text-xs"
                   >
                     {name}
                   </span>

@@ -23,24 +23,38 @@ export function ContentGrid({ items, onItemClick }: ContentGridProps) {
     );
   }
 
-  // Determine card sizes for mixed layout
-  const getCardSize = (index: number): 'large' | 'medium' | 'small' => {
-    if (index === 0) return 'large';
-    if (index % 7 === 0) return 'large';
-    return 'medium';
+  // Track which large card number we're on for alternating
+  let largeCardCount = 0;
+
+  // Determine card sizes and positions
+  const getCardProps = (index: number): { size: 'large' | 'medium'; position: 'left' | 'right' | 'auto' } => {
+    const isLarge = index === 0 || index % 7 === 0;
+    
+    if (isLarge) {
+      largeCardCount++;
+      // Alternate: odd large cards on left, even on right
+      const position = largeCardCount % 2 === 1 ? 'left' : 'right';
+      return { size: 'large', position };
+    }
+    
+    return { size: 'medium', position: 'auto' };
   };
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5 auto-rows-auto">
-      {items.map((item, index) => (
-        <ContentCard
-          key={item.id}
-          item={item}
-          size={getCardSize(index)}
-          index={index}
-          onClick={() => onItemClick?.(item)}
-        />
-      ))}
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5 auto-rows-auto grid-flow-dense">
+      {items.map((item, index) => {
+        const { size, position } = getCardProps(index);
+        return (
+          <ContentCard
+            key={item.id}
+            item={item}
+            size={size}
+            position={position}
+            index={index}
+            onClick={() => onItemClick?.(item)}
+          />
+        );
+      })}
     </div>
   );
 }

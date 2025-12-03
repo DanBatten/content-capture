@@ -145,7 +145,7 @@ export default function ArchivePage() {
                 {selectedSourceType && (
                   <button
                     onClick={() => setSelectedSourceType(null)}
-                    className="inline-flex items-center gap-2 px-3 py-1.5 bg-[var(--card-bg)] text-[var(--foreground)] font-mono-ui text-xs rounded-full hover:bg-[var(--card-hover)] transition-colors"
+                    className="inline-flex items-center gap-2 px-3 py-1.5 bg-[var(--card-bg)] text-[var(--foreground)] font-mono-ui text-xs hover:bg-[var(--card-hover)] transition-colors"
                   >
                     {selectedSourceType}
                     <span className="opacity-50">×</span>
@@ -154,7 +154,7 @@ export default function ArchivePage() {
                 {selectedTopic && (
                   <button
                     onClick={() => setSelectedTopic(null)}
-                    className="inline-flex items-center gap-2 px-3 py-1.5 bg-[var(--card-bg)] text-[var(--foreground)] font-mono-ui text-xs rounded-full hover:bg-[var(--card-hover)] transition-colors"
+                    className="inline-flex items-center gap-2 px-3 py-1.5 bg-[var(--card-bg)] text-[var(--foreground)] font-mono-ui text-xs hover:bg-[var(--card-hover)] transition-colors"
                   >
                     {selectedTopic}
                     <span className="opacity-50">×</span>
@@ -189,7 +189,7 @@ export default function ArchivePage() {
               {Array.from({ length: 10 }).map((_, i) => (
                 <div
                   key={i}
-                  className="aspect-[4/3] bg-[var(--card-bg)] rounded-lg animate-pulse"
+                  className="aspect-[4/3] bg-[var(--card-bg)] animate-pulse"
                 />
               ))}
             </div>

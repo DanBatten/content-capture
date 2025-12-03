@@ -5,6 +5,7 @@ import type { ContentItem } from '@/types/content';
 interface ContentCardProps {
   item: ContentItem;
   size?: 'large' | 'medium' | 'small';
+  position?: 'left' | 'right' | 'auto';
   onClick?: () => void;
   index?: number;
 }
@@ -17,14 +18,16 @@ const sourceColors: Record<string, string> = {
   web: 'bg-[var(--accent)]',
 };
 
-// Muted, warm topic colors
+// Vibrant topic colors
 const topicCardColors = [
-  'bg-[#8B7355]/20 text-[#5C4D3C]',
-  'bg-[#6B8E7B]/20 text-[#4A6354]',
-  'bg-[#9B8B7B]/20 text-[#6B5B4B]',
-  'bg-[#7B8B9B]/20 text-[#4B5B6B]',
-  'bg-[#A89080]/20 text-[#786050]',
-  'bg-[#8B9B7B]/20 text-[#5B6B4B]',
+  'bg-violet-500 text-white',
+  'bg-emerald-500 text-white',
+  'bg-amber-500 text-white',
+  'bg-rose-500 text-white',
+  'bg-cyan-500 text-white',
+  'bg-fuchsia-500 text-white',
+  'bg-lime-500 text-white',
+  'bg-orange-500 text-white',
 ];
 
 function getTopicColor(topic: string): string {
@@ -41,7 +44,7 @@ function getImageUrl(image: { url?: string; publicUrl?: string; originalUrl?: st
   return image.publicUrl || image.originalUrl || image.url || null;
 }
 
-export function ContentCard({ item, size = 'medium', onClick, index = 0 }: ContentCardProps) {
+export function ContentCard({ item, size = 'medium', position = 'auto', onClick, index = 0 }: ContentCardProps) {
   const hasImage = item.images && item.images.length > 0;
   const hasVideo = item.videos && item.videos.length > 0;
   const imageCount = item.images?.length || 0;
@@ -53,10 +56,18 @@ export function ContentCard({ item, size = 'medium', onClick, index = 0 }: Conte
     ? getImageUrl(item.images?.[0])
     : null;
 
-  const sizeClasses = {
-    large: 'col-span-2 row-span-2',
-    medium: 'col-span-1 row-span-1',
-    small: 'col-span-1 row-span-1',
+  // Size classes - large cards span 2 columns
+  const getSizeClasses = () => {
+    if (size === 'large') {
+      // For large cards, add position-based column start on xl screens
+      // xl has 4 columns, so right-aligned starts at column 3
+      // 2xl has 5 columns, so right-aligned starts at column 4
+      if (position === 'right') {
+        return 'col-span-1 sm:col-span-2 row-span-1 sm:row-span-2 xl:col-start-3 2xl:col-start-4';
+      }
+      return 'col-span-1 sm:col-span-2 row-span-1 sm:row-span-2';
+    }
+    return 'col-span-1 row-span-1';
   };
 
   const aspectClasses = {
@@ -74,9 +85,9 @@ export function ContentCard({ item, size = 'medium', onClick, index = 0 }: Conte
         group flex flex-col overflow-hidden cursor-pointer
         transition-all duration-300 ease-out
         hover:-translate-y-1 hover:shadow-xl
-        bg-[var(--card-bg)] rounded-lg
+        bg-[var(--card-bg)]
         opacity-0 animate-fade-in-up ${staggerClass}
-        ${sizeClasses[size]}
+        ${getSizeClasses()}
       `}
       onClick={onClick}
     >
@@ -172,7 +183,7 @@ export function ContentCard({ item, size = 'medium', onClick, index = 0 }: Conte
             {item.topics.slice(0, size === 'large' ? 4 : 2).map((topic) => (
               <span
                 key={topic}
-                className={`px-2 py-0.5 rounded-full text-xs font-mono-ui ${getTopicColor(topic)}`}
+                className={`px-2 py-0.5 text-xs font-mono-ui ${getTopicColor(topic)}`}
               >
                 {topic}
               </span>
