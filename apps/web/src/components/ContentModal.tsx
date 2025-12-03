@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import type { ContentItem } from '@/types/content';
 
 interface ContentModalProps {
@@ -94,6 +94,79 @@ function TextWithLinks({ text }: { text: string }) {
   );
 }
 
+// Horizontal swipeable gallery for mobile
+function MobileGallery({ media }: { media: Array<{ type: 'video' | 'image'; url: string; thumbnail?: string }> }) {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const handleScroll = () => {
+    if (scrollRef.current) {
+      const scrollLeft = scrollRef.current.scrollLeft;
+      const itemWidth = scrollRef.current.offsetWidth;
+      const newIndex = Math.round(scrollLeft / itemWidth);
+      setCurrentIndex(newIndex);
+    }
+  };
+
+  if (media.length === 0) return null;
+
+  return (
+    <div className="w-full flex-shrink-0">
+      {/* Scrollable gallery */}
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+      >
+        {media.map((item, index) => (
+          <div
+            key={index}
+            className="w-full flex-shrink-0 snap-center"
+          >
+            {item.type === 'video' ? (
+              <video
+                src={item.url}
+                poster={item.thumbnail}
+                controls
+                className="w-full h-auto max-h-[40vh] object-contain bg-black"
+              />
+            ) : (
+              <img
+                src={item.url}
+                alt={`Image ${index + 1}`}
+                className="w-full h-auto max-h-[40vh] object-contain bg-black"
+              />
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Dot indicators */}
+      {media.length > 1 && (
+        <div className="flex justify-center gap-1.5 py-3 bg-[#E8DED0]">
+          {media.map((_, index) => (
+            <button
+              key={index}
+              onClick={() => {
+                scrollRef.current?.scrollTo({
+                  left: index * (scrollRef.current?.offsetWidth || 0),
+                  behavior: 'smooth'
+                });
+              }}
+              className={`w-2 h-2 rounded-full transition-all ${
+                index === currentIndex
+                  ? 'bg-[var(--foreground)] w-4'
+                  : 'bg-[var(--foreground)]/30'
+              }`}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ContentModal({ item, onClose }: ContentModalProps) {
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -157,12 +230,12 @@ export function ContentModal({ item, onClose }: ContentModalProps) {
         onClick={onClose}
       />
 
-      {/* Modal container - top padding to clear nav, side/bottom padding for grid alignment */}
-      <div className="relative w-full h-full pt-[73px] px-6 sm:px-8 lg:px-12 pb-6 sm:pb-8 lg:pb-12">
+      {/* Modal container - fullscreen on mobile/tablet, padded on desktop (lg+) */}
+      <div className="relative w-full h-full pt-0 lg:pt-[73px] px-0 lg:px-12 pb-0 lg:pb-12">
         {/* Modal card */}
         <div className="w-full h-full flex flex-col bg-[#E8DED0] dark:bg-[#2d271f] overflow-hidden">
           {/* Full-width header */}
-          <div className="flex items-center justify-between px-6 sm:px-8 py-4 border-b border-[var(--panel-border)]">
+          <div className="flex items-center justify-between px-4 sm:px-6 lg:px-8 py-4 border-b border-[var(--panel-border)]">
             <div className="flex items-center gap-3">
               <span className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium ${sourceColors[item.source_type] || 'bg-[var(--accent)]'}`}>
                 {item.source_type === 'twitter' ? '𝕏' :
@@ -189,28 +262,35 @@ export function ContentModal({ item, onClose }: ContentModalProps) {
             </button>
           </div>
 
-          {/* Two-column content area */}
-          <div className="flex-1 flex overflow-hidden">
-            {/* Left side - Text content */}
-            <div className={`flex-1 overflow-y-auto p-6 sm:p-8 ${hasMedia ? 'md:w-2/5 lg:w-2/5' : 'w-full'}`}>
+          {/* Content area - stacked on mobile, side-by-side on desktop */}
+          <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+            {/* Mobile horizontal gallery - shown on mobile/tablet only */}
+            {hasMedia && (
+              <div className="lg:hidden">
+                <MobileGallery media={allMedia} />
+              </div>
+            )}
+
+            {/* Text content */}
+            <div className={`flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 ${hasMedia ? 'lg:w-2/5' : 'w-full'}`}>
               {/* Title */}
-              <h2 className="text-2xl sm:text-3xl font-medium text-[var(--foreground)] mb-6 leading-tight">
+              <h2 className="text-xl sm:text-2xl lg:text-3xl font-medium text-[var(--foreground)] mb-4 sm:mb-6 leading-tight">
                 {item.title || 'Untitled'}
               </h2>
 
               {/* Summary */}
               {item.summary && (
-                <div className="mb-8">
-                  <h3 className="font-mono-ui text-xs uppercase tracking-widest text-[var(--foreground-muted)] mb-3">Summary</h3>
-                  <p className="text-[var(--foreground)] leading-relaxed">{item.summary}</p>
+                <div className="mb-6 sm:mb-8">
+                  <h3 className="font-mono-ui text-xs uppercase tracking-widest text-[var(--foreground-muted)] mb-2 sm:mb-3">Summary</h3>
+                  <p className="text-[var(--foreground)] leading-relaxed text-sm sm:text-base">{item.summary}</p>
                 </div>
               )}
 
               {/* Body text */}
               {item.body_text && (
-                <div className="mb-8">
-                  <h3 className="font-mono-ui text-xs uppercase tracking-widest text-[var(--foreground-muted)] mb-3">Content</h3>
-                  <p className="text-[var(--foreground-muted)] whitespace-pre-wrap leading-relaxed">
+                <div className="mb-6 sm:mb-8">
+                  <h3 className="font-mono-ui text-xs uppercase tracking-widest text-[var(--foreground-muted)] mb-2 sm:mb-3">Content</h3>
+                  <p className="text-[var(--foreground-muted)] whitespace-pre-wrap leading-relaxed text-sm sm:text-base">
                     <TextWithLinks text={item.body_text} />
                   </p>
                 </div>
@@ -218,8 +298,8 @@ export function ContentModal({ item, onClose }: ContentModalProps) {
 
               {/* Extracted links */}
               {extractedLinks.length > 0 && (
-                <div className="mb-8">
-                  <h3 className="font-mono-ui text-xs uppercase tracking-widest text-[var(--foreground-muted)] mb-3">Links</h3>
+                <div className="mb-6 sm:mb-8">
+                  <h3 className="font-mono-ui text-xs uppercase tracking-widest text-[var(--foreground-muted)] mb-2 sm:mb-3">Links</h3>
                   <div className="space-y-2">
                     {extractedLinks.map((url, index) => (
                       <a
@@ -251,8 +331,8 @@ export function ContentModal({ item, onClose }: ContentModalProps) {
 
               {/* Topics */}
               {item.topics && item.topics.length > 0 && (
-                <div className="mb-8">
-                  <h3 className="font-mono-ui text-xs uppercase tracking-widest text-[var(--foreground-muted)] mb-3">Topics</h3>
+                <div className="mb-6 sm:mb-8">
+                  <h3 className="font-mono-ui text-xs uppercase tracking-widest text-[var(--foreground-muted)] mb-2 sm:mb-3">Topics</h3>
                   <div className="flex flex-wrap gap-2">
                     {item.topics.map((topic) => {
                       const color = getTagColor(topic, topicColors);
@@ -271,8 +351,8 @@ export function ContentModal({ item, onClose }: ContentModalProps) {
 
               {/* Use cases */}
               {item.use_cases && item.use_cases.length > 0 && (
-                <div className="mb-8">
-                  <h3 className="font-mono-ui text-xs uppercase tracking-widest text-[var(--foreground-muted)] mb-3">Use Cases</h3>
+                <div className="mb-6 sm:mb-8">
+                  <h3 className="font-mono-ui text-xs uppercase tracking-widest text-[var(--foreground-muted)] mb-2 sm:mb-3">Use Cases</h3>
                   <div className="flex flex-wrap gap-2">
                     {item.use_cases.map((useCase) => {
                       const color = getTagColor(useCase, useCaseColors);
@@ -290,7 +370,7 @@ export function ContentModal({ item, onClose }: ContentModalProps) {
               )}
 
               {/* View original link */}
-              <div className="mb-8">
+              <div className="mb-6 sm:mb-8">
                 <a
                   href={item.source_url}
                   target="_blank"
@@ -303,7 +383,7 @@ export function ContentModal({ item, onClose }: ContentModalProps) {
               </div>
 
               {/* Metadata */}
-              <div className="pt-6 border-t border-[var(--panel-border)]">
+              <div className="pt-4 sm:pt-6 border-t border-[var(--panel-border)]">
                 <div className="grid grid-cols-2 gap-4 font-mono-ui text-xs text-[var(--foreground-muted)]">
                   {item.published_at && (
                     <div>
@@ -327,10 +407,10 @@ export function ContentModal({ item, onClose }: ContentModalProps) {
               </div>
             </div>
 
-            {/* Right side - Media gallery (vertical scroll) */}
+            {/* Desktop vertical gallery - shown on lg+ only */}
             {hasMedia && (
-              <div className="hidden md:flex md:w-3/5 lg:w-3/5 flex-col overflow-hidden border-l border-[var(--panel-border)]">
-                <div className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-4">
+              <div className="hidden lg:flex lg:w-3/5 flex-col overflow-hidden border-l border-[var(--panel-border)]">
+                <div className="flex-1 overflow-y-auto p-6 lg:p-8 space-y-4">
                   {allMedia.map((media, index) => (
                     <div key={index} className="w-full">
                       {media.type === 'video' ? (
