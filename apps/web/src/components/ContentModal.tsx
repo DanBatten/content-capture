@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import type { ContentItem } from '@/types/content';
 
 interface ContentModalProps {
@@ -64,157 +64,6 @@ function getImageUrl(image: { url?: string; publicUrl?: string; originalUrl?: st
   return image.publicUrl || image.originalUrl || image.url || null;
 }
 
-function ImageGallery({ images, videos }: {
-  images?: ContentItem['images'];
-  videos?: ContentItem['videos'];
-}) {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [touchStart, setTouchStart] = useState<number | null>(null);
-  const [touchEnd, setTouchEnd] = useState<number | null>(null);
-
-  const mediaItems = useMemo(() => {
-    const items: Array<{ type: 'video' | 'image'; url: string; thumbnail?: string }> = [];
-
-    if (videos && videos.length > 0) {
-      videos.forEach(video => {
-        const url = video.originalUrl || video.url;
-        if (url) {
-          items.push({ type: 'video', url, thumbnail: video.thumbnail });
-        }
-      });
-    }
-
-    if (images && images.length > 0) {
-      images.forEach(image => {
-        const url = getImageUrl(image);
-        if (url) {
-          items.push({ type: 'image', url });
-        }
-      });
-    }
-
-    return items;
-  }, [images, videos]);
-
-  const totalItems = mediaItems.length;
-  const minSwipeDistance = 50;
-
-  const onTouchStart = (e: React.TouchEvent) => {
-    setTouchEnd(null);
-    setTouchStart(e.targetTouches[0].clientX);
-  };
-
-  const onTouchMove = (e: React.TouchEvent) => {
-    setTouchEnd(e.targetTouches[0].clientX);
-  };
-
-  const onTouchEnd = () => {
-    if (!touchStart || !touchEnd) return;
-
-    const distance = touchStart - touchEnd;
-    const isLeftSwipe = distance > minSwipeDistance;
-    const isRightSwipe = distance < -minSwipeDistance;
-
-    if (isLeftSwipe && currentIndex < totalItems - 1) {
-      setCurrentIndex(prev => prev + 1);
-    }
-    if (isRightSwipe && currentIndex > 0) {
-      setCurrentIndex(prev => prev - 1);
-    }
-  };
-
-  const goToSlide = (index: number) => {
-    setCurrentIndex(index);
-  };
-
-  const goToPrev = () => {
-    if (currentIndex > 0) {
-      setCurrentIndex(prev => prev - 1);
-    }
-  };
-
-  const goToNext = () => {
-    if (currentIndex < totalItems - 1) {
-      setCurrentIndex(prev => prev + 1);
-    }
-  };
-
-  if (totalItems === 0) return null;
-
-  const currentItem = mediaItems[currentIndex];
-
-  return (
-    <div
-      className="relative w-full max-h-[50vh] bg-[var(--card-bg)] flex-shrink-0 overflow-hidden"
-      onTouchStart={onTouchStart}
-      onTouchMove={onTouchMove}
-      onTouchEnd={onTouchEnd}
-    >
-      <div className="relative w-full h-full flex items-center justify-center" style={{ maxHeight: '50vh' }}>
-        {currentItem.type === 'video' ? (
-          <video
-            key={currentItem.url}
-            src={currentItem.url}
-            poster={currentItem.thumbnail}
-            controls
-            className="max-w-full max-h-[50vh] object-contain"
-          />
-        ) : (
-          <img
-            key={currentItem.url}
-            src={currentItem.url}
-            alt={`Image ${currentIndex + 1}`}
-            className="max-w-full max-h-[50vh] object-contain"
-          />
-        )}
-      </div>
-
-      {totalItems > 1 && (
-        <>
-          {currentIndex > 0 && (
-            <button
-              onClick={(e) => { e.stopPropagation(); goToPrev(); }}
-              className="absolute left-3 top-1/2 -translate-y-1/2 font-mono-ui text-sm text-[var(--foreground)]/60 hover:text-[var(--foreground)] transition-colors"
-            >
-              [ ← ]
-            </button>
-          )}
-          {currentIndex < totalItems - 1 && (
-            <button
-              onClick={(e) => { e.stopPropagation(); goToNext(); }}
-              className="absolute right-3 top-1/2 -translate-y-1/2 font-mono-ui text-sm text-[var(--foreground)]/60 hover:text-[var(--foreground)] transition-colors"
-            >
-              [ → ]
-            </button>
-          )}
-        </>
-      )}
-
-      {totalItems > 1 && (
-        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
-          {mediaItems.map((_, index) => (
-            <button
-              key={index}
-              onClick={(e) => { e.stopPropagation(); goToSlide(index); }}
-              className={`w-1.5 h-1.5 rounded-full transition-all ${
-                index === currentIndex
-                  ? 'bg-[var(--foreground)] w-4'
-                  : 'bg-[var(--foreground)]/30 hover:bg-[var(--foreground)]/50'
-              }`}
-            />
-          ))}
-        </div>
-      )}
-
-      {totalItems > 1 && (
-        <div className="absolute top-3 right-3 font-mono-ui text-xs text-[var(--foreground-muted)]">
-          {currentIndex + 1} / {totalItems}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function TextWithLinks({ text }: { text: string }) {
   const urlRegex = /(https?:\/\/[^\s<>"{}|\\^`[\]]+)/gi;
   const parts = text.split(urlRegex);
@@ -270,38 +119,50 @@ export function ContentModal({ item, onClose }: ContentModalProps) {
     return extractUrls(item.body_text);
   }, [item?.body_text]);
 
+  // Collect all media (videos first, then images)
+  const allMedia = useMemo(() => {
+    if (!item) return [];
+    const media: Array<{ type: 'video' | 'image'; url: string; thumbnail?: string }> = [];
+    
+    if (item.videos && item.videos.length > 0) {
+      item.videos.forEach(video => {
+        const url = video.originalUrl || video.url;
+        if (url) {
+          media.push({ type: 'video', url, thumbnail: video.thumbnail });
+        }
+      });
+    }
+    
+    if (item.images && item.images.length > 0) {
+      item.images.forEach(image => {
+        const url = getImageUrl(image);
+        if (url) {
+          media.push({ type: 'image', url });
+        }
+      });
+    }
+    
+    return media;
+  }, [item]);
+
   if (!item) return null;
 
-  const hasImage = item.images && item.images.length > 0;
-  const hasVideo = item.videos && item.videos.length > 0;
+  const hasMedia = allMedia.length > 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+    <div className="fixed inset-0 z-40">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-[#1a1a1a]/60 panel-backdrop"
+        className="absolute inset-0 bg-[#1a1a1a]/40"
         onClick={onClose}
       />
 
-      {/* Modal */}
-      <div className="relative w-full max-w-3xl max-h-[90vh] bg-[var(--panel-bg)] rounded-lg overflow-hidden shadow-2xl flex flex-col">
-        {/* Close button */}
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 z-10 font-mono-ui text-sm text-[var(--foreground-muted)] hover:text-[var(--foreground)] transition-colors"
-        >
-          [ close ]
-        </button>
-
-        {/* Media section */}
-        {(hasImage || hasVideo) && (
-          <ImageGallery images={item.images} videos={item.videos} />
-        )}
-
-        {/* Content section */}
-        <div className="flex-1 overflow-y-auto p-6 sm:p-8">
-          {/* Source badge and link */}
-          <div className="flex items-center justify-between mb-6 pb-6 border-b border-[var(--panel-border)]">
+      {/* Modal container - top padding to clear nav, side/bottom padding for grid alignment */}
+      <div className="relative w-full h-full pt-[73px] px-6 sm:px-8 lg:px-12 pb-6 sm:pb-8 lg:pb-12">
+        {/* Modal card */}
+        <div className="w-full h-full flex flex-col bg-[#E8DED0] dark:bg-[#2d271f] overflow-hidden">
+          {/* Full-width header */}
+          <div className="flex items-center justify-between px-6 sm:px-8 py-4 border-b border-[var(--panel-border)]">
             <div className="flex items-center gap-3">
               <span className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium ${sourceColors[item.source_type] || 'bg-[var(--accent)]'}`}>
                 {item.source_type === 'twitter' ? '𝕏' :
@@ -320,124 +181,177 @@ export function ContentModal({ item, onClose }: ContentModalProps) {
                 </div>
               )}
             </div>
-            <a
-              href={item.source_url}
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
+              onClick={onClose}
               className="font-mono-ui text-sm text-[var(--foreground-muted)] hover:text-[var(--foreground)] transition-colors"
             >
-              [ view original ]
-            </a>
+              [ close ]
+            </button>
           </div>
 
-          {/* Title */}
-          <h2 className="text-xl font-medium text-[var(--foreground)] mb-4">
-            {item.title || 'Untitled'}
-          </h2>
+          {/* Two-column content area */}
+          <div className="flex-1 flex overflow-hidden">
+            {/* Left side - Text content */}
+            <div className={`flex-1 overflow-y-auto p-6 sm:p-8 ${hasMedia ? 'md:w-2/5 lg:w-2/5' : 'w-full'}`}>
+              {/* Title */}
+              <h2 className="text-2xl sm:text-3xl font-medium text-[var(--foreground)] mb-6 leading-tight">
+                {item.title || 'Untitled'}
+              </h2>
 
-          {/* Summary */}
-          {item.summary && (
-            <div className="mb-6 p-4 bg-[var(--card-bg)] rounded-lg">
-              <h3 className="font-mono-ui text-xs uppercase tracking-widest text-[var(--foreground-muted)] mb-2">Summary</h3>
-              <p className="text-[var(--foreground)]">{item.summary}</p>
-            </div>
-          )}
+              {/* Summary */}
+              {item.summary && (
+                <div className="mb-8">
+                  <h3 className="font-mono-ui text-xs uppercase tracking-widest text-[var(--foreground-muted)] mb-3">Summary</h3>
+                  <p className="text-[var(--foreground)] leading-relaxed">{item.summary}</p>
+                </div>
+              )}
 
-          {/* Body text */}
-          {item.body_text && (
-            <div className="mb-6">
-              <p className="text-[var(--foreground-muted)] whitespace-pre-wrap leading-relaxed">
-                <TextWithLinks text={item.body_text} />
-              </p>
-            </div>
-          )}
+              {/* Body text */}
+              {item.body_text && (
+                <div className="mb-8">
+                  <h3 className="font-mono-ui text-xs uppercase tracking-widest text-[var(--foreground-muted)] mb-3">Content</h3>
+                  <p className="text-[var(--foreground-muted)] whitespace-pre-wrap leading-relaxed">
+                    <TextWithLinks text={item.body_text} />
+                  </p>
+                </div>
+              )}
 
-          {/* Extracted links */}
-          {extractedLinks.length > 0 && (
-            <div className="mb-6">
-              <h3 className="font-mono-ui text-xs uppercase tracking-widest text-[var(--foreground-muted)] mb-3">Links</h3>
-              <div className="space-y-2">
-                {extractedLinks.map((url, index) => (
-                  <a
-                    key={index}
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-3 p-3 bg-[var(--card-bg)] hover:bg-[var(--card-hover)] rounded-lg transition-colors group"
-                  >
-                    <div className="w-8 h-8 rounded-full bg-[var(--accent)] flex items-center justify-center flex-shrink-0">
-                      <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                      </svg>
+              {/* Extracted links */}
+              {extractedLinks.length > 0 && (
+                <div className="mb-8">
+                  <h3 className="font-mono-ui text-xs uppercase tracking-widest text-[var(--foreground-muted)] mb-3">Links</h3>
+                  <div className="space-y-2">
+                    {extractedLinks.map((url, index) => (
+                      <a
+                        key={index}
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-3 p-3 bg-[var(--background)] hover:bg-[var(--background-warm)] transition-colors group"
+                      >
+                        <div className="w-8 h-8 bg-[var(--accent)] flex items-center justify-center flex-shrink-0">
+                          <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                          </svg>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-mono-ui text-sm text-[var(--foreground)] truncate group-hover:text-[var(--accent-dark)] transition-colors">
+                            {getDomain(url)}
+                          </p>
+                          <p className="font-mono-ui text-xs text-[var(--foreground-muted)] truncate">
+                            {url}
+                          </p>
+                        </div>
+                        <span className="font-mono-ui text-xs text-[var(--foreground-muted)] group-hover:text-[var(--foreground)] transition-colors">→</span>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Topics */}
+              {item.topics && item.topics.length > 0 && (
+                <div className="mb-8">
+                  <h3 className="font-mono-ui text-xs uppercase tracking-widest text-[var(--foreground-muted)] mb-3">Topics</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {item.topics.map((topic) => {
+                      const color = getTagColor(topic, topicColors);
+                      return (
+                        <span
+                          key={topic}
+                          className={`px-3 py-1.5 ${color.bg} ${color.text} font-mono-ui text-xs`}
+                        >
+                          {topic}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Use cases */}
+              {item.use_cases && item.use_cases.length > 0 && (
+                <div className="mb-8">
+                  <h3 className="font-mono-ui text-xs uppercase tracking-widest text-[var(--foreground-muted)] mb-3">Use Cases</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {item.use_cases.map((useCase) => {
+                      const color = getTagColor(useCase, useCaseColors);
+                      return (
+                        <span
+                          key={useCase}
+                          className={`px-3 py-1.5 ${color.bg} ${color.text} font-mono-ui text-xs`}
+                        >
+                          {useCase}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* View original link */}
+              <div className="mb-8">
+                <a
+                  href={item.source_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 font-mono-ui text-sm text-[var(--foreground-muted)] hover:text-[var(--foreground)] transition-colors"
+                >
+                  [ view original source ]
+                  <span>→</span>
+                </a>
+              </div>
+
+              {/* Metadata */}
+              <div className="pt-6 border-t border-[var(--panel-border)]">
+                <div className="grid grid-cols-2 gap-4 font-mono-ui text-xs text-[var(--foreground-muted)]">
+                  {item.published_at && (
+                    <div>
+                      <span className="uppercase tracking-widest opacity-60">Published</span>
+                      <p className="mt-1 text-[var(--foreground)]">{new Date(item.published_at).toLocaleDateString()}</p>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-mono-ui text-sm text-[var(--foreground)] truncate group-hover:text-[var(--accent-dark)] transition-colors">
-                        {getDomain(url)}
-                      </p>
-                      <p className="font-mono-ui text-xs text-[var(--foreground-muted)] truncate">
-                        {url}
-                      </p>
+                  )}
+                  {item.captured_at && (
+                    <div>
+                      <span className="uppercase tracking-widest opacity-60">Captured</span>
+                      <p className="mt-1 text-[var(--foreground)]">{new Date(item.captured_at).toLocaleDateString()}</p>
                     </div>
-                    <span className="font-mono-ui text-xs text-[var(--foreground-muted)] group-hover:text-[var(--foreground)] transition-colors">→</span>
-                  </a>
-                ))}
+                  )}
+                  {item.content_type && (
+                    <div>
+                      <span className="uppercase tracking-widest opacity-60">Type</span>
+                      <p className="mt-1 text-[var(--foreground)]">{item.content_type}</p>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          )}
 
-          {/* Topics */}
-          {item.topics && item.topics.length > 0 && (
-            <div className="mb-6">
-              <h3 className="font-mono-ui text-xs uppercase tracking-widest text-[var(--foreground-muted)] mb-3">Topics</h3>
-              <div className="flex flex-wrap gap-2">
-                {item.topics.map((topic) => {
-                  const color = getTagColor(topic, topicColors);
-                  return (
-                    <span
-                      key={topic}
-                      className={`px-3 py-1.5 ${color.bg} ${color.text} font-mono-ui text-xs`}
-                    >
-                      {topic}
-                    </span>
-                  );
-                })}
+            {/* Right side - Media gallery (vertical scroll) */}
+            {hasMedia && (
+              <div className="hidden md:flex md:w-3/5 lg:w-3/5 flex-col overflow-hidden border-l border-[var(--panel-border)]">
+                <div className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-4">
+                  {allMedia.map((media, index) => (
+                    <div key={index} className="w-full">
+                      {media.type === 'video' ? (
+                        <video
+                          src={media.url}
+                          poster={media.thumbnail}
+                          controls
+                          className="w-full h-auto"
+                        />
+                      ) : (
+                        <img
+                          src={media.url}
+                          alt={`Image ${index + 1}`}
+                          className="w-full h-auto"
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
-
-          {/* Use cases */}
-          {item.use_cases && item.use_cases.length > 0 && (
-            <div className="mb-6">
-              <h3 className="font-mono-ui text-xs uppercase tracking-widest text-[var(--foreground-muted)] mb-3">Use Cases</h3>
-              <div className="flex flex-wrap gap-2">
-                {item.use_cases.map((useCase) => {
-                  const color = getTagColor(useCase, useCaseColors);
-                  return (
-                    <span
-                      key={useCase}
-                      className={`px-3 py-1.5 ${color.bg} ${color.text} font-mono-ui text-xs`}
-                    >
-                      {useCase}
-                    </span>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Metadata */}
-          <div className="pt-6 border-t border-[var(--panel-border)]">
-            <div className="flex flex-wrap gap-6 font-mono-ui text-xs text-[var(--foreground-muted)]">
-              {item.published_at && (
-                <span>Published: {new Date(item.published_at).toLocaleDateString()}</span>
-              )}
-              {item.captured_at && (
-                <span>Captured: {new Date(item.captured_at).toLocaleDateString()}</span>
-              )}
-              {item.content_type && (
-                <span>Type: {item.content_type}</span>
-              )}
-            </div>
+            )}
           </div>
         </div>
       </div>
