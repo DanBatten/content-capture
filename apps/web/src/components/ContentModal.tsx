@@ -9,34 +9,29 @@ interface ContentModalProps {
 }
 
 const sourceColors: Record<string, string> = {
-  twitter: 'bg-neutral-900',
-  instagram: 'bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400',
-  linkedin: 'bg-blue-700',
-  pinterest: 'bg-red-600',
-  web: 'bg-emerald-600',
+  twitter: 'bg-[#1a1a1a]',
+  instagram: 'bg-gradient-to-br from-[#833AB4] via-[#E1306C] to-[#F77737]',
+  linkedin: 'bg-[#0A66C2]',
+  pinterest: 'bg-[#E60023]',
+  web: 'bg-[var(--accent)]',
 };
 
-// Color palette for topics - deterministic based on topic name
+// Muted, warm topic colors
 const topicColors = [
-  { bg: 'bg-violet-100 dark:bg-violet-900/40', text: 'text-violet-700 dark:text-violet-300' },
-  { bg: 'bg-emerald-100 dark:bg-emerald-900/40', text: 'text-emerald-700 dark:text-emerald-300' },
-  { bg: 'bg-amber-100 dark:bg-amber-900/40', text: 'text-amber-700 dark:text-amber-300' },
-  { bg: 'bg-rose-100 dark:bg-rose-900/40', text: 'text-rose-700 dark:text-rose-300' },
-  { bg: 'bg-cyan-100 dark:bg-cyan-900/40', text: 'text-cyan-700 dark:text-cyan-300' },
-  { bg: 'bg-fuchsia-100 dark:bg-fuchsia-900/40', text: 'text-fuchsia-700 dark:text-fuchsia-300' },
-  { bg: 'bg-lime-100 dark:bg-lime-900/40', text: 'text-lime-700 dark:text-lime-300' },
-  { bg: 'bg-orange-100 dark:bg-orange-900/40', text: 'text-orange-700 dark:text-orange-300' },
+  { bg: 'bg-[#8B7355]/20', text: 'text-[#5C4D3C]' },
+  { bg: 'bg-[#6B8E7B]/20', text: 'text-[#4A6354]' },
+  { bg: 'bg-[#9B8B7B]/20', text: 'text-[#6B5B4B]' },
+  { bg: 'bg-[#7B8B9B]/20', text: 'text-[#4B5B6B]' },
+  { bg: 'bg-[#A89080]/20', text: 'text-[#786050]' },
+  { bg: 'bg-[#8B9B7B]/20', text: 'text-[#5B6B4B]' },
 ];
 
-// Color palette for use cases
 const useCaseColors = [
-  { bg: 'bg-blue-100 dark:bg-blue-900/40', text: 'text-blue-700 dark:text-blue-300' },
-  { bg: 'bg-indigo-100 dark:bg-indigo-900/40', text: 'text-indigo-700 dark:text-indigo-300' },
-  { bg: 'bg-sky-100 dark:bg-sky-900/40', text: 'text-sky-700 dark:text-sky-300' },
-  { bg: 'bg-teal-100 dark:bg-teal-900/40', text: 'text-teal-700 dark:text-teal-300' },
+  { bg: 'bg-[#7B8B9B]/20', text: 'text-[#4B5B6B]' },
+  { bg: 'bg-[#8B7B9B]/20', text: 'text-[#5B4B6B]' },
+  { bg: 'bg-[#9B7B8B]/20', text: 'text-[#6B4B5B]' },
 ];
 
-// Get consistent color for a tag based on its name
 function getTagColor(tag: string, colors: typeof topicColors): typeof topicColors[0] {
   let hash = 0;
   for (let i = 0; i < tag.length; i++) {
@@ -46,15 +41,12 @@ function getTagColor(tag: string, colors: typeof topicColors): typeof topicColor
   return colors[Math.abs(hash) % colors.length];
 }
 
-// Extract URLs from text
 function extractUrls(text: string): string[] {
   const urlRegex = /https?:\/\/[^\s<>"{}|\\^`[\]]+/gi;
   const matches = text.match(urlRegex) || [];
-  // Remove duplicates and clean up trailing punctuation
   return [...new Set(matches.map(url => url.replace(/[.,;:!?)]+$/, '')))];
 }
 
-// Get domain from URL for display
 function getDomain(url: string): string {
   try {
     const domain = new URL(url).hostname.replace('www.', '');
@@ -64,13 +56,11 @@ function getDomain(url: string): string {
   }
 }
 
-// Helper to get the best image URL from various formats
 function getImageUrl(image: { url?: string; publicUrl?: string; originalUrl?: string } | undefined): string | null {
   if (!image) return null;
   return image.publicUrl || image.originalUrl || image.url || null;
 }
 
-// Image Gallery component with swipe support
 function ImageGallery({ images, videos }: {
   images?: ContentItem['images'];
   videos?: ContentItem['videos'];
@@ -79,7 +69,6 @@ function ImageGallery({ images, videos }: {
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
 
-  // Combine video (first) with images for gallery
   const mediaItems = useMemo(() => {
     const items: Array<{ type: 'video' | 'image'; url: string; thumbnail?: string }> = [];
 
@@ -105,8 +94,6 @@ function ImageGallery({ images, videos }: {
   }, [images, videos]);
 
   const totalItems = mediaItems.length;
-
-  // Minimum swipe distance (in px)
   const minSwipeDistance = 50;
 
   const onTouchStart = (e: React.TouchEvent) => {
@@ -155,12 +142,11 @@ function ImageGallery({ images, videos }: {
 
   return (
     <div
-      className="relative w-full max-h-[50vh] bg-neutral-100 dark:bg-neutral-800 flex-shrink-0 overflow-hidden"
+      className="relative w-full max-h-[50vh] bg-[var(--card-bg)] flex-shrink-0 overflow-hidden"
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
     >
-      {/* Media container with constrained height */}
       <div className="relative w-full h-full flex items-center justify-center" style={{ maxHeight: '50vh' }}>
         {currentItem.type === 'video' ? (
           <video
@@ -180,52 +166,45 @@ function ImageGallery({ images, videos }: {
         )}
       </div>
 
-      {/* Navigation arrows (only show if multiple items) */}
       {totalItems > 1 && (
         <>
           {currentIndex > 0 && (
             <button
               onClick={(e) => { e.stopPropagation(); goToPrev(); }}
-              className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/30 hover:bg-black/50 backdrop-blur-sm flex items-center justify-center text-white transition-colors"
+              className="absolute left-3 top-1/2 -translate-y-1/2 font-mono-ui text-sm text-[var(--foreground)]/60 hover:text-[var(--foreground)] transition-colors"
             >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
+              [ ← ]
             </button>
           )}
           {currentIndex < totalItems - 1 && (
             <button
               onClick={(e) => { e.stopPropagation(); goToNext(); }}
-              className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/30 hover:bg-black/50 backdrop-blur-sm flex items-center justify-center text-white transition-colors"
+              className="absolute right-3 top-1/2 -translate-y-1/2 font-mono-ui text-sm text-[var(--foreground)]/60 hover:text-[var(--foreground)] transition-colors"
             >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
+              [ → ]
             </button>
           )}
         </>
       )}
 
-      {/* Dot indicators */}
       {totalItems > 1 && (
         <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
           {mediaItems.map((_, index) => (
             <button
               key={index}
               onClick={(e) => { e.stopPropagation(); goToSlide(index); }}
-              className={`w-2 h-2 rounded-full transition-all ${
+              className={`w-1.5 h-1.5 rounded-full transition-all ${
                 index === currentIndex
-                  ? 'bg-white w-4'
-                  : 'bg-white/50 hover:bg-white/70'
+                  ? 'bg-[var(--foreground)] w-4'
+                  : 'bg-[var(--foreground)]/30 hover:bg-[var(--foreground)]/50'
               }`}
             />
           ))}
         </div>
       )}
 
-      {/* Image counter badge */}
       {totalItems > 1 && (
-        <div className="absolute top-3 right-3 px-2 py-1 rounded-full bg-black/30 backdrop-blur-sm text-white text-xs font-medium">
+        <div className="absolute top-3 right-3 font-mono-ui text-xs text-[var(--foreground-muted)]">
           {currentIndex + 1} / {totalItems}
         </div>
       )}
@@ -233,7 +212,6 @@ function ImageGallery({ images, videos }: {
   );
 }
 
-// Render text with clickable links
 function TextWithLinks({ text }: { text: string }) {
   const urlRegex = /(https?:\/\/[^\s<>"{}|\\^`[\]]+)/gi;
   const parts = text.split(urlRegex);
@@ -250,7 +228,7 @@ function TextWithLinks({ text }: { text: string }) {
                 href={cleanUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-blue-600 dark:text-blue-400 hover:underline break-all"
+                className="text-[var(--accent-dark)] hover:underline break-all"
               >
                 {cleanUrl}
               </a>
@@ -265,7 +243,6 @@ function TextWithLinks({ text }: { text: string }) {
 }
 
 export function ContentModal({ item, onClose }: ContentModalProps) {
-  // Close on escape key
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -274,7 +251,6 @@ export function ContentModal({ item, onClose }: ContentModalProps) {
     return () => window.removeEventListener('keydown', handleEscape);
   }, [onClose]);
 
-  // Prevent body scroll when modal is open
   useEffect(() => {
     if (item) {
       document.body.style.overflow = 'hidden';
@@ -286,7 +262,6 @@ export function ContentModal({ item, onClose }: ContentModalProps) {
     };
   }, [item]);
 
-  // Extract links from body text
   const extractedLinks = useMemo(() => {
     if (!item?.body_text) return [];
     return extractUrls(item.body_text);
@@ -298,48 +273,46 @@ export function ContentModal({ item, onClose }: ContentModalProps) {
   const hasVideo = item.videos && item.videos.length > 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+        className="absolute inset-0 bg-[#1a1a1a]/60 panel-backdrop"
         onClick={onClose}
       />
 
       {/* Modal */}
-      <div className="relative w-full max-w-3xl max-h-[90vh] bg-white dark:bg-neutral-900 rounded-2xl overflow-hidden shadow-2xl flex flex-col">
+      <div className="relative w-full max-w-3xl max-h-[90vh] bg-[var(--panel-bg)] rounded-lg overflow-hidden shadow-2xl flex flex-col">
         {/* Close button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 z-10 w-10 h-10 rounded-full bg-black/20 hover:bg-black/40 backdrop-blur-sm flex items-center justify-center text-white transition-colors"
+          className="absolute top-4 right-4 z-10 font-mono-ui text-sm text-[var(--foreground-muted)] hover:text-[var(--foreground)] transition-colors"
         >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
+          [ close ]
         </button>
 
-        {/* Media section with swipeable gallery */}
+        {/* Media section */}
         {(hasImage || hasVideo) && (
           <ImageGallery images={item.images} videos={item.videos} />
         )}
 
         {/* Content section */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-6 sm:p-8">
           {/* Source badge and link */}
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-6 pb-6 border-b border-[var(--panel-border)]">
             <div className="flex items-center gap-3">
-              <span className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium ${sourceColors[item.source_type] || 'bg-neutral-700'}`}>
+              <span className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium ${sourceColors[item.source_type] || 'bg-[var(--accent)]'}`}>
                 {item.source_type === 'twitter' ? '𝕏' :
                  item.source_type === 'instagram' ? 'IG' :
                  item.source_type === 'linkedin' ? 'in' :
-                 item.source_type === 'pinterest' ? 'P' : '🌐'}
+                 item.source_type === 'pinterest' ? 'P' : '◎'}
               </span>
               {(item.author_name || item.author_handle) && (
                 <div>
-                  <p className="font-medium text-neutral-900 dark:text-white">
+                  <p className="font-medium text-[var(--foreground)]">
                     {item.author_name}
                   </p>
                   {item.author_handle && (
-                    <p className="text-sm text-neutral-500">{item.author_handle}</p>
+                    <p className="font-mono-ui text-xs text-[var(--foreground-muted)]">{item.author_handle}</p>
                   )}
                 </div>
               )}
@@ -348,41 +321,38 @@ export function ContentModal({ item, onClose }: ContentModalProps) {
               href={item.source_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg transition-colors"
+              className="font-mono-ui text-sm text-[var(--foreground-muted)] hover:text-[var(--foreground)] transition-colors"
             >
-              <span>View original</span>
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-              </svg>
+              [ view original ]
             </a>
           </div>
 
           {/* Title */}
-          <h2 className="text-xl font-semibold text-neutral-900 dark:text-white mb-3">
+          <h2 className="text-xl font-medium text-[var(--foreground)] mb-4">
             {item.title || 'Untitled'}
           </h2>
 
           {/* Summary */}
           {item.summary && (
-            <div className="mb-4 p-4 bg-neutral-50 dark:bg-neutral-800/50 rounded-xl">
-              <h3 className="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-2">Summary</h3>
-              <p className="text-neutral-700 dark:text-neutral-300">{item.summary}</p>
+            <div className="mb-6 p-4 bg-[var(--card-bg)] rounded-lg">
+              <h3 className="font-mono-ui text-xs uppercase tracking-widest text-[var(--foreground-muted)] mb-2">Summary</h3>
+              <p className="text-[var(--foreground)]">{item.summary}</p>
             </div>
           )}
 
-          {/* Body text with clickable links */}
+          {/* Body text */}
           {item.body_text && (
-            <div className="mb-4">
-              <p className="text-neutral-600 dark:text-neutral-400 whitespace-pre-wrap">
+            <div className="mb-6">
+              <p className="text-[var(--foreground-muted)] whitespace-pre-wrap leading-relaxed">
                 <TextWithLinks text={item.body_text} />
               </p>
             </div>
           )}
 
-          {/* Extracted links as cards */}
+          {/* Extracted links */}
           {extractedLinks.length > 0 && (
-            <div className="mb-4">
-              <h3 className="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-2">Links</h3>
+            <div className="mb-6">
+              <h3 className="font-mono-ui text-xs uppercase tracking-widest text-[var(--foreground-muted)] mb-3">Links</h3>
               <div className="space-y-2">
                 {extractedLinks.map((url, index) => (
                   <a
@@ -390,41 +360,39 @@ export function ContentModal({ item, onClose }: ContentModalProps) {
                     href={url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-3 p-3 bg-neutral-50 dark:bg-neutral-800/50 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-xl transition-colors group"
+                    className="flex items-center gap-3 p-3 bg-[var(--card-bg)] hover:bg-[var(--card-hover)] rounded-lg transition-colors group"
                   >
-                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center flex-shrink-0">
-                      <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <div className="w-8 h-8 rounded-full bg-[var(--accent)] flex items-center justify-center flex-shrink-0">
+                      <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                       </svg>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-neutral-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                      <p className="font-mono-ui text-sm text-[var(--foreground)] truncate group-hover:text-[var(--accent-dark)] transition-colors">
                         {getDomain(url)}
                       </p>
-                      <p className="text-xs text-neutral-500 truncate">
+                      <p className="font-mono-ui text-xs text-[var(--foreground-muted)] truncate">
                         {url}
                       </p>
                     </div>
-                    <svg className="w-4 h-4 text-neutral-400 group-hover:text-blue-500 transition-colors flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                    </svg>
+                    <span className="font-mono-ui text-xs text-[var(--foreground-muted)] group-hover:text-[var(--foreground)] transition-colors">→</span>
                   </a>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Topics - color coded */}
+          {/* Topics */}
           {item.topics && item.topics.length > 0 && (
-            <div className="mb-4">
-              <h3 className="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-2">Topics</h3>
+            <div className="mb-6">
+              <h3 className="font-mono-ui text-xs uppercase tracking-widest text-[var(--foreground-muted)] mb-3">Topics</h3>
               <div className="flex flex-wrap gap-2">
                 {item.topics.map((topic) => {
                   const color = getTagColor(topic, topicColors);
                   return (
                     <span
                       key={topic}
-                      className={`px-3 py-1 ${color.bg} ${color.text} text-sm rounded-full font-medium`}
+                      className={`px-3 py-1.5 ${color.bg} ${color.text} font-mono-ui text-xs rounded-full`}
                     >
                       {topic}
                     </span>
@@ -434,17 +402,17 @@ export function ContentModal({ item, onClose }: ContentModalProps) {
             </div>
           )}
 
-          {/* Use cases - color coded */}
+          {/* Use cases */}
           {item.use_cases && item.use_cases.length > 0 && (
-            <div className="mb-4">
-              <h3 className="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-2">Use Cases</h3>
+            <div className="mb-6">
+              <h3 className="font-mono-ui text-xs uppercase tracking-widest text-[var(--foreground-muted)] mb-3">Use Cases</h3>
               <div className="flex flex-wrap gap-2">
                 {item.use_cases.map((useCase) => {
                   const color = getTagColor(useCase, useCaseColors);
                   return (
                     <span
                       key={useCase}
-                      className={`px-3 py-1 ${color.bg} ${color.text} text-sm rounded-full font-medium`}
+                      className={`px-3 py-1.5 ${color.bg} ${color.text} font-mono-ui text-xs rounded-full`}
                     >
                       {useCase}
                     </span>
@@ -454,30 +422,9 @@ export function ContentModal({ item, onClose }: ContentModalProps) {
             </div>
           )}
 
-          {/* Multiple images gallery */}
-          {item.images && item.images.length > 1 && (
-            <div className="mb-4">
-              <h3 className="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-2">Images</h3>
-              <div className="grid grid-cols-3 gap-2">
-                {item.images.map((image, index) => {
-                  const imgUrl = getImageUrl(image);
-                  if (!imgUrl) return null;
-                  return (
-                    <img
-                      key={index}
-                      src={imgUrl}
-                      alt={`Image ${index + 1}`}
-                      className="w-full aspect-square object-cover rounded-lg"
-                    />
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
           {/* Metadata */}
-          <div className="pt-4 border-t border-neutral-200 dark:border-neutral-800">
-            <div className="flex flex-wrap gap-4 text-sm text-neutral-500">
+          <div className="pt-6 border-t border-[var(--panel-border)]">
+            <div className="flex flex-wrap gap-6 font-mono-ui text-xs text-[var(--foreground-muted)]">
               {item.published_at && (
                 <span>Published: {new Date(item.published_at).toLocaleDateString()}</span>
               )}

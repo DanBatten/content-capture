@@ -13,7 +13,7 @@ export default function ArchivePage() {
   const [filters, setFilters] = useState<FiltersData | null>(null);
   const [selectedItem, setSelectedItem] = useState<ContentItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Collapsed by default
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -24,6 +24,9 @@ export default function ArchivePage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
+
+  // Check if any filters are active
+  const hasActiveFilters = selectedSourceType !== null || selectedTopic !== null;
 
   // Fetch filters
   useEffect(() => {
@@ -89,82 +92,104 @@ export default function ArchivePage() {
   }, [debouncedSearch]);
 
   return (
-    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950">
-      {/* Sidebar - fixed on large screens */}
+    <div className="min-h-screen bg-[var(--background)]">
+      {/* Slide-in Sidebar */}
       <Sidebar
         filters={filters}
         selectedSourceType={selectedSourceType}
         selectedTopic={selectedTopic}
-        onSourceTypeChange={(type) => {
-          setSelectedSourceType(type);
-          setIsSidebarOpen(false);
-        }}
-        onTopicChange={(topic) => {
-          setSelectedTopic(topic);
-          setIsSidebarOpen(false);
-        }}
+        onSourceTypeChange={setSelectedSourceType}
+        onTopicChange={setSelectedTopic}
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
       />
 
-      <main className="lg:ml-72">
+      {/* Main content - full width */}
+      <main className="w-full">
         {/* Header */}
-        <header className="sticky top-0 z-30 bg-neutral-50/80 dark:bg-neutral-950/80 backdrop-blur-xl border-b border-neutral-200 dark:border-neutral-800">
-          <div className="px-4 sm:px-6 py-3">
-            <SearchBar
-              value={searchQuery}
-              onChange={setSearchQuery}
-              onMenuClick={() => setIsSidebarOpen(true)}
-            />
+        <header className="sticky top-0 z-30 bg-[var(--background)]/90 panel-backdrop border-b border-[var(--panel-border)]">
+          <div className="px-6 sm:px-8 lg:px-12 py-4">
+            {/* Top row with branding and search */}
+            <div className="flex items-center justify-between gap-8">
+              {/* Brand */}
+              <div className="flex items-center gap-4">
+                <h1 className="font-mono-ui text-xs uppercase tracking-widest text-[var(--foreground-muted)]">
+                  Archive
+                </h1>
+              </div>
 
-            {/* Active filters */}
-            {(selectedSourceType || selectedTopic) && (
-              <div className="flex items-center gap-2 mt-3 flex-wrap">
-                <span className="text-xs text-neutral-500">Filtering by:</span>
+              {/* Search and filters */}
+              <div className="flex-1 max-w-2xl">
+                <SearchBar
+                  value={searchQuery}
+                  onChange={setSearchQuery}
+                  onFilterClick={() => setIsSidebarOpen(true)}
+                  hasActiveFilters={hasActiveFilters}
+                />
+              </div>
+
+              {/* Right side stats */}
+              <div className="hidden sm:flex items-center gap-6 text-[var(--foreground-muted)]">
+                <span className="font-mono-ui text-sm">
+                  {total} items
+                </span>
+              </div>
+            </div>
+
+            {/* Active filters row */}
+            {hasActiveFilters && (
+              <div className="flex items-center gap-3 mt-4 pt-4 border-t border-[var(--panel-border)]">
+                <span className="font-mono-ui text-xs uppercase tracking-wider text-[var(--foreground-muted)]">
+                  Active:
+                </span>
                 {selectedSourceType && (
                   <button
                     onClick={() => setSelectedSourceType(null)}
-                    className="inline-flex items-center gap-1 px-2 py-1 bg-neutral-200 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 text-xs rounded-full hover:bg-neutral-300 dark:hover:bg-neutral-700 transition-colors"
+                    className="inline-flex items-center gap-2 px-3 py-1.5 bg-[var(--card-bg)] text-[var(--foreground)] font-mono-ui text-xs rounded-full hover:bg-[var(--card-hover)] transition-colors"
                   >
                     {selectedSourceType}
-                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
+                    <span className="opacity-50">×</span>
                   </button>
                 )}
                 {selectedTopic && (
                   <button
                     onClick={() => setSelectedTopic(null)}
-                    className="inline-flex items-center gap-1 px-2 py-1 bg-neutral-200 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 text-xs rounded-full hover:bg-neutral-300 dark:hover:bg-neutral-700 transition-colors"
+                    className="inline-flex items-center gap-2 px-3 py-1.5 bg-[var(--card-bg)] text-[var(--foreground)] font-mono-ui text-xs rounded-full hover:bg-[var(--card-hover)] transition-colors"
                   >
                     {selectedTopic}
-                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
+                    <span className="opacity-50">×</span>
                   </button>
                 )}
+                <button
+                  onClick={() => {
+                    setSelectedSourceType(null);
+                    setSelectedTopic(null);
+                  }}
+                  className="font-mono-ui text-xs text-[var(--foreground-muted)] hover:text-[var(--foreground)] transition-colors ml-auto"
+                >
+                  [ clear all ]
+                </button>
               </div>
             )}
           </div>
         </header>
 
         {/* Content */}
-        <div className="p-4 sm:p-6 pt-3">
-          {/* Results count */}
-          {!isLoading && (
-            <p className="text-sm text-neutral-500 mb-3">
-              {total} {total === 1 ? 'item' : 'items'}
-              {searchQuery && ` matching "${searchQuery}"`}
+        <div className="px-6 sm:px-8 lg:px-12 py-8">
+          {/* Results info */}
+          {!isLoading && searchQuery && (
+            <p className="font-mono-ui text-sm text-[var(--foreground-muted)] mb-6">
+              {total} {total === 1 ? 'result' : 'results'} for "{searchQuery}"
             </p>
           )}
 
           {/* Loading state */}
           {isLoading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {Array.from({ length: 8 }).map((_, i) => (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5">
+              {Array.from({ length: 10 }).map((_, i) => (
                 <div
                   key={i}
-                  className="aspect-[4/3] bg-neutral-200 dark:bg-neutral-800 rounded-2xl animate-pulse"
+                  className="aspect-[4/3] bg-[var(--card-bg)] rounded-lg animate-pulse"
                 />
               ))}
             </div>
@@ -177,23 +202,23 @@ export default function ArchivePage() {
 
               {/* Pagination */}
               {totalPages > 1 && (
-                <div className="flex items-center justify-center gap-2 mt-8">
+                <div className="flex items-center justify-center gap-4 mt-12 pt-8 border-t border-[var(--panel-border)]">
                   <button
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
                     disabled={page === 1}
-                    className="px-4 py-2 text-sm font-medium text-neutral-700 dark:text-neutral-300 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="font-mono-ui text-sm text-[var(--foreground-muted)] hover:text-[var(--foreground)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                   >
-                    Previous
+                    [ prev ]
                   </button>
-                  <span className="text-sm text-neutral-500">
-                    Page {page} of {totalPages}
+                  <span className="font-mono-ui text-sm text-[var(--foreground-muted)]">
+                    {page} / {totalPages}
                   </span>
                   <button
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                     disabled={page === totalPages}
-                    className="px-4 py-2 text-sm font-medium text-neutral-700 dark:text-neutral-300 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="font-mono-ui text-sm text-[var(--foreground-muted)] hover:text-[var(--foreground)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                   >
-                    Next
+                    [ next ]
                   </button>
                 </div>
               )}

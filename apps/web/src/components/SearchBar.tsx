@@ -1,42 +1,60 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 
 interface SearchBarProps {
   value: string;
   onChange: (value: string) => void;
-  onMenuClick: () => void;
+  onFilterClick: () => void;
   placeholder?: string;
+  hasActiveFilters?: boolean;
 }
 
-export function SearchBar({ value, onChange, onMenuClick, placeholder = 'Search your archive...' }: SearchBarProps) {
+export function SearchBar({ 
+  value, 
+  onChange, 
+  onFilterClick, 
+  placeholder = 'Search archive...',
+  hasActiveFilters = false
+}: SearchBarProps) {
   const [isFocused, setIsFocused] = useState(false);
 
   return (
-    <div className="flex items-center gap-3">
-      {/* Mobile menu button */}
+    <div className="flex items-center gap-4">
+      {/* Filter toggle button */}
       <button
-        onClick={onMenuClick}
-        className="lg:hidden p-2 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg transition-colors"
+        onClick={onFilterClick}
+        className={`
+          font-mono-ui text-sm transition-colors flex items-center gap-2
+          ${hasActiveFilters 
+            ? 'text-[var(--foreground)]' 
+            : 'text-[var(--foreground-muted)] hover:text-[var(--foreground)]'
+          }
+        `}
       >
-        <svg className="w-6 h-6 text-neutral-700 dark:text-neutral-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-        </svg>
+        <span>{hasActiveFilters ? '[+]' : '[ ]'}</span>
+        <span>Filters</span>
+        {hasActiveFilters && (
+          <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)]" />
+        )}
       </button>
 
+      {/* Divider */}
+      <div className="w-px h-5 bg-[var(--panel-border)]" />
+
       {/* Search input */}
-      <div className={`flex-1 relative transition-all duration-200 ${isFocused ? 'scale-[1.01]' : ''}`}>
-        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+      <div className={`flex-1 relative transition-all duration-200`}>
+        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
           <svg
-            className={`w-5 h-5 transition-colors ${isFocused ? 'text-neutral-900 dark:text-white' : 'text-neutral-400'}`}
+            className={`w-4 h-4 transition-colors ${isFocused ? 'text-[var(--foreground)]' : 'text-[var(--foreground-muted)]'}`}
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
+            strokeWidth={1.5}
           >
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
-              strokeWidth={2}
               d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
             />
           </svg>
@@ -49,25 +67,23 @@ export function SearchBar({ value, onChange, onMenuClick, placeholder = 'Search 
           onBlur={() => setIsFocused(false)}
           placeholder={placeholder}
           className={`
-            w-full pl-12 pr-4 py-3
-            bg-neutral-100 dark:bg-neutral-800
-            border-2 border-transparent
-            rounded-xl
-            text-neutral-900 dark:text-white
-            placeholder-neutral-500
+            w-full pl-10 pr-4 py-2.5
+            bg-transparent
+            border-b border-transparent
+            text-[var(--foreground)]
+            placeholder-[var(--foreground-muted)]
+            font-mono-ui text-sm
             outline-none
             transition-all duration-200
-            ${isFocused ? 'bg-white dark:bg-neutral-900 border-neutral-900 dark:border-white shadow-lg' : 'hover:bg-neutral-200/70 dark:hover:bg-neutral-700/70'}
+            ${isFocused ? 'border-[var(--foreground)]' : 'hover:border-[var(--panel-border)]'}
           `}
         />
         {value && (
           <button
             onClick={() => onChange('')}
-            className="absolute inset-y-0 right-0 pr-4 flex items-center text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
+            className="absolute inset-y-0 right-0 pr-3 flex items-center text-[var(--foreground-muted)] hover:text-[var(--foreground)] transition-colors"
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <span className="font-mono-ui text-xs">[ clear ]</span>
           </button>
         )}
       </div>
