@@ -16,6 +16,28 @@ const sourceColors: Record<string, string> = {
   web: 'bg-emerald-600',
 };
 
+// Color palette for topic pills on cards (semi-transparent for overlay)
+const topicCardColors = [
+  'bg-violet-500/30 text-violet-100',
+  'bg-emerald-500/30 text-emerald-100',
+  'bg-amber-500/30 text-amber-100',
+  'bg-rose-500/30 text-rose-100',
+  'bg-cyan-500/30 text-cyan-100',
+  'bg-fuchsia-500/30 text-fuchsia-100',
+  'bg-lime-500/30 text-lime-100',
+  'bg-orange-500/30 text-orange-100',
+];
+
+// Get consistent color for a tag based on its name
+function getTopicColor(topic: string): string {
+  let hash = 0;
+  for (let i = 0; i < topic.length; i++) {
+    hash = ((hash << 5) - hash) + topic.charCodeAt(i);
+    hash |= 0;
+  }
+  return topicCardColors[Math.abs(hash) % topicCardColors.length];
+}
+
 // Helper to get the best image URL from various formats
 function getImageUrl(image: { url?: string; publicUrl?: string; originalUrl?: string } | undefined): string | null {
   if (!image) return null;
@@ -115,13 +137,13 @@ export function ContentCard({ item, size = 'medium', onClick }: ContentCardProps
             </p>
           )}
 
-          {/* Topics */}
+          {/* Topics - color coded */}
           {item.topics && item.topics.length > 0 && (
             <div className="flex flex-wrap gap-1.5 pt-2">
               {item.topics.slice(0, size === 'large' ? 4 : 2).map((topic) => (
                 <span
                   key={topic}
-                  className="px-2 py-0.5 bg-white/20 backdrop-blur-sm rounded-full text-white/90 text-xs"
+                  className={`px-2 py-0.5 backdrop-blur-sm rounded-full text-xs font-medium ${getTopicColor(topic)}`}
                 >
                   {topic}
                 </span>
