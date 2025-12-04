@@ -22,7 +22,7 @@ export function HeroHeader({ isVisible = true }: HeroHeaderProps) {
         
         {/* Decorative arrows */}
         <div className="font-mono-ui text-sm sm:text-base text-[var(--foreground)] opacity-70 mb-2">
-          &gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;
+          &gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;
         </div>
         
         {/* Tagline */}

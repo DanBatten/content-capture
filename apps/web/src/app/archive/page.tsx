@@ -201,8 +201,8 @@ export default function ArchivePage() {
         {/* Header */}
         <header className="sticky top-0 z-30 bg-[var(--background)]/90 panel-backdrop border-b border-[var(--panel-border)]">
           <div className="px-6 sm:px-8 lg:px-12 py-4">
-            {/* Top row with branding and search */}
-            <div className="flex items-center justify-between gap-8">
+            {/* Top row - Brand, Filter (mobile), Search (desktop) */}
+            <div className="flex items-center justify-between gap-4 sm:gap-8">
               {/* Brand */}
               <div className="flex items-center gap-3">
                 <span className="font-pixel text-lg tracking-tight text-[var(--foreground)]">
@@ -211,8 +211,26 @@ export default function ArchivePage() {
                 <FolderIcon size="sm" className="text-[var(--foreground)]" />
               </div>
 
-              {/* Search and filters */}
-              <div className="flex-1 max-w-2xl">
+              {/* Mobile: Filter button only */}
+              <button
+                onClick={() => setIsSidebarOpen(true)}
+                className={`
+                  sm:hidden font-mono-ui text-sm transition-colors flex items-center gap-2
+                  ${hasActiveFilters 
+                    ? 'text-[var(--foreground)]' 
+                    : 'text-[var(--foreground-muted)] hover:text-[var(--foreground)]'
+                  }
+                `}
+              >
+                <span>{hasActiveFilters ? '[+]' : '[ ]'}</span>
+                <span>Filters</span>
+                {hasActiveFilters && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)]" />
+                )}
+              </button>
+
+              {/* Desktop: Search and filters */}
+              <div className="hidden sm:block flex-1 max-w-2xl">
                 <SearchBar
                   value={searchQuery}
                   onChange={setSearchQuery}
@@ -234,6 +252,42 @@ export default function ArchivePage() {
                       Last updated: {latestItemDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} {latestItemDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
                     </span>
                   </>
+                )}
+              </div>
+            </div>
+
+            {/* Mobile: Search bar on its own row */}
+            <div className="sm:hidden mt-3">
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <svg
+                    className="w-4 h-4 text-[var(--foreground-muted)]"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={1.5}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                  </svg>
+                </div>
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search with natural language..."
+                  className="w-full pl-10 pr-4 py-2.5 bg-transparent text-[var(--foreground)] placeholder-[var(--foreground-muted)] font-mono-ui text-sm outline-none"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-[var(--foreground-muted)] hover:text-[var(--foreground)] transition-colors"
+                  >
+                    <span className="font-mono-ui text-xs">[ clear ]</span>
+                  </button>
                 )}
               </div>
             </div>
