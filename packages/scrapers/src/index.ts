@@ -16,8 +16,8 @@ export class ScraperRegistry {
   private scrapers: ContentScraper[] = [];
   private genericScraper: GenericScraper;
 
-  constructor() {
-    this.genericScraper = new GenericScraper();
+  constructor(apifyToken?: string) {
+    this.genericScraper = new GenericScraper(apifyToken);
   }
 
   register(scraper: ContentScraper): void {
@@ -45,15 +45,16 @@ export class ScraperRegistry {
 /**
  * Create a configured scraper registry with all available scrapers
  * Requires environment variables:
- * - APIFY_API_TOKEN: For Twitter and Instagram scrapers
+ * - APIFY_API_TOKEN: For Twitter/Instagram scrapers AND web page screenshots
  */
 export function createScraperRegistry(): ScraperRegistry {
-  const registry = new ScraperRegistry();
-
-  // Only register platform scrapers if API token is available
   const apifyToken = process.env.APIFY_API_TOKEN;
+  
+  const registry = new ScraperRegistry(apifyToken);
 
   if (apifyToken) {
+    console.log('Apify configured - screenshots and social scrapers enabled');
+    
     try {
       registry.register(new TwitterScraper(apifyToken));
     } catch (e) {
@@ -66,7 +67,7 @@ export function createScraperRegistry(): ScraperRegistry {
       console.warn('Failed to initialize Instagram scraper:', e);
     }
   } else {
-    console.warn('APIFY_API_TOKEN not set - Twitter and Instagram scrapers disabled');
+    console.warn('APIFY_API_TOKEN not set - screenshots and social scrapers disabled');
   }
 
   return registry;

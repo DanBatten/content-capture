@@ -1,15 +1,17 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Fraunces, Work_Sans } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
+const fraunces = Fraunces({
+  weight: ["400", "500", "700"],
   subsets: ["latin"],
-  variable: "--font-geist-sans",
+  variable: "--font-fraunces",
 });
 
-const geistMono = Geist_Mono({
+const workSans = Work_Sans({
+  weight: ["400", "500", "600"],
   subsets: ["latin"],
-  variable: "--font-geist-mono",
+  variable: "--font-work-sans",
 });
 
 export const metadata: Metadata = {
@@ -24,7 +26,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}>
+      <body className={`${fraunces.variable} ${workSans.variable}`}>
         {children}
       </body>
     </html>

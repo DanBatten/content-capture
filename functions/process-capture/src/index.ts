@@ -145,10 +145,11 @@ async function updateStatus(
 async function processMedia(
   captureId: string,
   content: ExtractedContent
-): Promise<{ images: ProcessedMedia[]; videos: ProcessedMedia[] }> {
+): Promise<{ images: ProcessedMedia[]; videos: ProcessedMedia[]; screenshot?: string }> {
   const bucket = storage.bucket(bucketName);
   const processedImages: ProcessedMedia[] = [];
   const processedVideos: ProcessedMedia[] = [];
+  let screenshotUrl: string | undefined;
 
   // Process images
   for (let i = 0; i < content.images.length; i++) {
@@ -190,7 +191,39 @@ async function processMedia(
     });
   }
 
-  return { images: processedImages, videos: processedVideos };
+  // Process screenshot if available
+  if (content.screenshot) {
+    try {
+      const gcsPath = `captures/${captureId}/screenshot.jpg`;
+      
+      if (content.screenshot.startsWith('data:')) {
+        // Base64 data URL - extract and upload
+        const base64Data = content.screenshot.split(',')[1];
+        const buffer = Buffer.from(base64Data, 'base64');
+        const file = bucket.file(gcsPath);
+        
+        await file.save(buffer, {
+          metadata: { contentType: 'image/jpeg' },
+        });
+        await file.makePublic();
+        
+        screenshotUrl = `https://storage.googleapis.com/${bucketName}/${gcsPath}`;
+      } else if (content.screenshot.startsWith('http')) {
+        // URL from screenshot service - download and upload to our storage
+        screenshotUrl = await downloadAndUpload(content.screenshot, bucket, gcsPath);
+      }
+      
+      console.log(`Screenshot saved: ${screenshotUrl}`);
+    } catch (err) {
+      console.warn('Failed to process screenshot:', err);
+      // Keep the original URL as fallback if it's a direct URL
+      if (content.screenshot.startsWith('http')) {
+        screenshotUrl = content.screenshot;
+      }
+    }
+  }
+
+  return { images: processedImages, videos: processedVideos, screenshot: screenshotUrl };
 }
 
 interface ProcessedMedia {
@@ -245,7 +278,7 @@ async function saveToDatabase(
   url: string,
   content: ExtractedContent,
   analysis: AnalysisResult,
-  media: { images: ProcessedMedia[]; videos: ProcessedMedia[] },
+  media: { images: ProcessedMedia[]; videos: ProcessedMedia[]; screenshot?: string },
   notes?: string
 ): Promise<void> {
   const { error } = await supabase
@@ -274,6 +307,7 @@ async function saveToDatabase(
       platform_data: {
         ...content.platformData,
         ...(notes ? { user_notes: notes } : {}),
+        ...(media.screenshot ? { screenshot: media.screenshot } : {}),
       },
 
       // Status

@@ -4,6 +4,7 @@ export interface ScraperOptions {
   timeout?: number;
   maxImages?: number;
   includeComments?: boolean;
+  takeScreenshot?: boolean;
 }
 
 export interface ContentScraper {

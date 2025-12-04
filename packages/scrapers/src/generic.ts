@@ -1,13 +1,23 @@
 import * as cheerio from 'cheerio';
+import { ApifyClient } from 'apify-client';
 import type { ExtractedContent, MediaItem } from '@content-capture/core';
 import type { ContentScraper, ScraperOptions } from './types';
 
 /**
  * Generic web scraper using fetch + cheerio
  * Extracts Open Graph metadata, title, description, and main content
+ * Uses Apify for screenshots when API token is available
  */
 export class GenericScraper implements ContentScraper {
   name = 'generic';
+  private apifyClient?: ApifyClient;
+
+  constructor(apifyToken?: string) {
+    const token = apifyToken || process.env.APIFY_API_TOKEN;
+    if (token) {
+      this.apifyClient = new ApifyClient({ token });
+    }
+  }
 
   canHandle(_url: string): boolean {
     // Generic scraper can handle any URL as a fallback
@@ -17,6 +27,7 @@ export class GenericScraper implements ContentScraper {
   async scrape(url: string, options?: ScraperOptions): Promise<ExtractedContent> {
     const timeout = options?.timeout || 15000;
     const maxImages = options?.maxImages || 10;
+    const takeScreenshot = options?.takeScreenshot ?? true;
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
@@ -132,6 +143,16 @@ export class GenericScraper implements ContentScraper {
           ]
         : [];
 
+      // Take screenshot if enabled and Apify is available
+      let screenshot: string | undefined;
+      if (takeScreenshot && this.apifyClient) {
+        try {
+          screenshot = await this.takeScreenshot(url);
+        } catch (err) {
+          console.warn('Screenshot capture failed:', err);
+        }
+      }
+
       return {
         title,
         description,
@@ -141,6 +162,7 @@ export class GenericScraper implements ContentScraper {
         publishedAt,
         images,
         videos,
+        screenshot,
         platformData: {
           ogType,
           canonicalUrl: $('link[rel="canonical"]').attr('href'),
@@ -148,6 +170,69 @@ export class GenericScraper implements ContentScraper {
       };
     } finally {
       clearTimeout(timeoutId);
+    }
+  }
+
+  /**
+   * Take a screenshot of a URL using Apify's screenshot actor
+   */
+  private async takeScreenshot(url: string): Promise<string | undefined> {
+    if (!this.apifyClient) return undefined;
+
+    try {
+      console.log(`Taking screenshot of ${url} via Apify...`);
+      
+      // Use Apify's web-scraper or screenshot actor
+      // apify/screenshot-url is a simple, fast actor for screenshots
+      const run = await this.apifyClient.actor('apify/screenshot-url').call({
+        url,
+        viewportWidth: 1280,
+        viewportHeight: 800,
+        scrollToBottom: false,
+        delayMillis: 2000, // Wait for page to load
+        waitUntil: 'networkidle2',
+      }, {
+        timeout: 60, // 60 second timeout
+        memory: 1024,
+      });
+
+      // Get the screenshot from the key-value store
+      const { defaultKeyValueStoreId } = run;
+      const store = this.apifyClient.keyValueStore(defaultKeyValueStoreId);
+      
+      // The actor saves screenshot as 'screenshot.png' or 'OUTPUT'
+      const record = await store.getRecord('screenshot');
+      
+      if (record && record.value) {
+        // Return as base64 data URL
+        // The value can be a Buffer or ArrayBuffer depending on the response
+        const value = record.value as unknown;
+        let base64: string;
+        
+        if (Buffer.isBuffer(value)) {
+          base64 = value.toString('base64');
+        } else if (value instanceof ArrayBuffer) {
+          base64 = Buffer.from(value).toString('base64');
+        } else if (typeof value === 'string') {
+          // Already base64 or URL
+          if (value.startsWith('data:') || value.startsWith('http')) {
+            return value;
+          }
+          base64 = value;
+        } else {
+          console.warn('Unexpected screenshot value type:', typeof value);
+          return undefined;
+        }
+        
+        console.log('Screenshot captured successfully');
+        return `data:image/png;base64,${base64}`;
+      }
+
+      console.warn('No screenshot found in Apify output');
+      return undefined;
+    } catch (err) {
+      console.error('Apify screenshot error:', err);
+      return undefined;
     }
   }
 

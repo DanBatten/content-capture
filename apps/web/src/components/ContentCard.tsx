@@ -18,19 +18,19 @@ const sourceColors: Record<string, string> = {
   web: 'bg-[var(--accent)]',
 };
 
-// Vibrant topic colors
+// Soft, muted topic colors
 const topicCardColors = [
-  'bg-violet-500 text-white',
-  'bg-emerald-500 text-white',
-  'bg-amber-500 text-white',
-  'bg-rose-500 text-white',
-  'bg-cyan-500 text-white',
-  'bg-fuchsia-500 text-white',
-  'bg-lime-500 text-white',
-  'bg-orange-500 text-white',
+  'bg-violet-300/70 text-violet-900',
+  'bg-emerald-300/70 text-emerald-900',
+  'bg-amber-300/70 text-amber-900',
+  'bg-rose-300/70 text-rose-900',
+  'bg-cyan-300/70 text-cyan-900',
+  'bg-fuchsia-300/70 text-fuchsia-900',
+  'bg-lime-300/70 text-lime-900',
+  'bg-orange-300/70 text-orange-900',
 ];
 
-function getTopicColor(topic: string): string {
+export function getTopicColor(topic: string): string {
   let hash = 0;
   for (let i = 0; i < topic.length; i++) {
     hash = ((hash << 5) - hash) + topic.charCodeAt(i);
@@ -50,11 +50,31 @@ export function ContentCard({ item, size = 'medium', position = 'auto', onClick,
   const imageCount = item.images?.length || 0;
   const hasMultipleImages = imageCount > 1;
 
-  const thumbnail = hasVideo && item.videos?.[0]?.thumbnail
-    ? item.videos[0].thumbnail
-    : hasImage
-    ? getImageUrl(item.images?.[0])
-    : null;
+  // For web items, prefer screenshot, then OG image
+  // For social items, prefer video thumbnail, then images
+  // For Twitter without images, use fallback
+  const getWebThumbnail = () => {
+    const screenshot = item.platform_data?.screenshot as string | undefined;
+    if (screenshot) return screenshot;
+    if (hasImage) return getImageUrl(item.images?.[0]);
+    return null;
+  };
+
+  const getTwitterThumbnail = () => {
+    if (hasVideo && item.videos?.[0]?.thumbnail) return item.videos[0].thumbnail;
+    if (hasImage) return getImageUrl(item.images?.[0]);
+    return '/twitter-fallback.png'; // Watercolor fallback for text-only tweets
+  };
+
+  const thumbnail = item.source_type === 'web'
+    ? getWebThumbnail()
+    : item.source_type === 'twitter'
+      ? getTwitterThumbnail()
+      : hasVideo && item.videos?.[0]?.thumbnail
+        ? item.videos[0].thumbnail
+        : hasImage
+          ? getImageUrl(item.images?.[0])
+          : null;
 
   // Size classes - large cards span 2 columns
   const getSizeClasses = () => {

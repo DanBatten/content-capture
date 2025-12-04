@@ -1,6 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import type { FiltersData } from '@/types/content';
+import { getTopicColor } from './ContentCard';
 
 interface SidebarProps {
   filters: FiltersData | null;
@@ -20,6 +22,8 @@ const sourceTypeLabels: Record<string, string> = {
   web: 'Web',
 };
 
+const INITIAL_TOPICS_COUNT = 5;
+
 export function Sidebar({
   filters,
   selectedSourceType,
@@ -29,6 +33,13 @@ export function Sidebar({
   isOpen,
   onClose,
 }: SidebarProps) {
+  const [showAllTopics, setShowAllTopics] = useState(false);
+  
+  const topicsToShow = showAllTopics 
+    ? filters?.topics 
+    : filters?.topics?.slice(0, INITIAL_TOPICS_COUNT);
+  
+  const hasMoreTopics = (filters?.topics?.length || 0) > INITIAL_TOPICS_COUNT;
   return (
     <>
       {/* Backdrop overlay */}
@@ -135,7 +146,7 @@ export function Sidebar({
               <h2 className="font-mono-ui text-xs uppercase tracking-widest text-[var(--foreground-muted)] mb-4">
                 Topics
               </h2>
-              <div className="space-y-1 max-h-72 overflow-y-auto">
+              <div className="space-y-1">
                 <button
                   onClick={() => {
                     onTopicChange(null);
@@ -154,7 +165,7 @@ export function Sidebar({
                     <span>All topics</span>
                   </span>
                 </button>
-                {filters.topics.slice(0, 15).map(({ name, count }) => (
+                {topicsToShow?.map(({ name, count }) => (
                   <button
                     key={name}
                     onClick={() => {
@@ -176,6 +187,17 @@ export function Sidebar({
                     <span className="text-xs opacity-60 ml-2">{count}</span>
                   </button>
                 ))}
+                {hasMoreTopics && (
+                  <button
+                    onClick={() => setShowAllTopics(!showAllTopics)}
+                    className="w-full py-2 font-mono-ui text-xs text-[var(--accent-dark)] hover:text-[var(--foreground)] transition-colors text-left"
+                  >
+                    {showAllTopics 
+                      ? `[ show less ]` 
+                      : `[ show ${(filters?.topics?.length || 0) - INITIAL_TOPICS_COUNT} more ]`
+                    }
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -190,7 +212,7 @@ export function Sidebar({
                 {filters.disciplines.slice(0, 10).map(({ name }) => (
                   <span
                     key={name}
-                    className="px-3 py-1.5 bg-[var(--background)] text-[var(--foreground-muted)] font-mono-ui text-xs"
+                    className={`px-3 py-1.5 font-mono-ui text-xs ${getTopicColor(name)}`}
                   >
                     {name}
                   </span>

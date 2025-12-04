@@ -83,6 +83,7 @@ export interface ExtractedContent {
   publishedAt?: string;
   images: MediaItem[];
   videos: VideoItem[];
+  screenshot?: string; // URL of page screenshot
   platformData?: Record<string, unknown>;
 }
 

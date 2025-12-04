@@ -18,8 +18,10 @@
   },
   "devDependencies": {
     "@google-cloud/pubsub": "^5.2.0",
+    "@google-cloud/storage": "^7.18.0",
     "@notionhq/client": "^2.2.15",
     "@supabase/supabase-js": "^2.86.0",
+    "apify-client": "^2.20.0",
     "dotenv": "^17.2.3",
     "prettier": "^3.4.2",
     "tsx": "^4.21.0",
