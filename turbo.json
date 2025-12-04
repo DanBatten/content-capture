@@ -1,6 +1,12 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "ui": "tui",
+  "globalEnv": [
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "GOOGLE_CLOUD_PROJECT_ID",
+    "GOOGLE_CLOUD_PUBSUB_TOPIC",
+    "GOOGLE_APPLICATION_CREDENTIALS_JSON"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
