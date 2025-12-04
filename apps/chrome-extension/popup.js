@@ -1,5 +1,5 @@
-// Default API URL - change this to your deployed URL
-const DEFAULT_API_URL = 'http://localhost:3000';
+// Default API URL
+const DEFAULT_API_URL = 'https://www.archivvve.com';
 
 // DOM Elements
 const urlPreview = document.getElementById('url-preview');
