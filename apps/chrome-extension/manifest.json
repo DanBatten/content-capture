@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Content Capture",
-  "version": "1.0.0",
-  "description": "Save links to your personal content archive",
+  "name": "Archive",
+  "version": "1.1.0",
+  "description": "Save interesting things to your personal archive",
   "permissions": ["activeTab", "storage"],
   "action": {
     "default_popup": "popup.html",
@@ -28,5 +28,5 @@
       "description": "Save current page"
     }
   },
-  "host_permissions": ["http://localhost:3000/*", "https://*.vercel.app/*"]
+  "host_permissions": ["http://localhost:3000/*", "https://*.vercel.app/*", "https://*.archivvve.com/*"]
 }
