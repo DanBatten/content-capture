@@ -15,11 +15,11 @@ const workSans = Work_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Archive",
-  description: "An index of interesting things",
+  title: "Archive — An index of interesting things",
+  description: "Save and organize interesting content from Twitter, Instagram, LinkedIn, and the web. Your personal archive of ideas, inspiration, and things worth remembering.",
   openGraph: {
-    title: "Archive",
-    description: "An index of interesting things",
+    title: "Archive — An index of interesting things",
+    description: "Save and organize interesting content from Twitter, Instagram, LinkedIn, and the web. Your personal archive of ideas, inspiration, and things worth remembering.",
     url: "https://www.archivvve.com",
     siteName: "Archive",
     images: [
@@ -35,8 +35,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Archive",
-    description: "An index of interesting things",
+    title: "Archive — An index of interesting things",
+    description: "Save and organize interesting content from Twitter, Instagram, LinkedIn, and the web. Your personal archive of ideas, inspiration, and things worth remembering.",
     images: ["/og-image.png"],
   },
 };
