@@ -15,8 +15,30 @@ const workSans = Work_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Archive — Content Capture",
-  description: "Save, organize, and explore content from across the web",
+  title: "Archive",
+  description: "An index of interesting things",
+  openGraph: {
+    title: "Archive",
+    description: "An index of interesting things",
+    url: "https://www.archivvve.com",
+    siteName: "Archive",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Archive - An index of interesting things",
+      },
+    ],
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Archive",
+    description: "An index of interesting things",
+    images: ["/og-image.png"],
+  },
 };
 
 export default function RootLayout({
