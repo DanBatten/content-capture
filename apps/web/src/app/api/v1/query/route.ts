@@ -1,20 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+// Lazy-initialized clients to avoid build-time errors
+let supabase: SupabaseClient | null = null;
+let anthropic: Anthropic | null = null;
+let openai: OpenAI | null = null;
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY!,
-});
+function getSupabase() {
+  if (!supabase) {
+    supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+  }
+  return supabase;
+}
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
-});
+function getAnthropic() {
+  if (!anthropic) {
+    anthropic = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY!,
+    });
+  }
+  return anthropic;
+}
+
+function getOpenAI() {
+  if (!openai) {
+    openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY!,
+    });
+  }
+  return openai;
+}
 
 /**
  * Validate API key for external access
@@ -85,7 +105,7 @@ export async function POST(request: NextRequest) {
     const contentLimit = deepResearch ? 2000 : 1000;
 
     // 1. Generate embedding for the query
-    const embeddingResponse = await openai.embeddings.create({
+    const embeddingResponse = await getOpenAI().embeddings.create({
       model: 'text-embedding-3-small',
       input: query,
       dimensions: 1536,
@@ -94,7 +114,7 @@ export async function POST(request: NextRequest) {
     const queryEmbedding = embeddingResponse.data[0].embedding;
 
     // 2. Semantic search
-    const { data: results, error: searchError } = await supabase.rpc(
+    const { data: results, error: searchError } = await getSupabase().rpc(
       'search_content_semantic',
       {
         query_embedding: `[${queryEmbedding.join(',')}]`,
@@ -143,7 +163,7 @@ ${context}
 
 Synthesize insights from these sources. Be specific and cite sources when relevant.`;
 
-      const response = await anthropic.messages.create({
+      const response = await getAnthropic().messages.create({
         model: 'claude-sonnet-4-20250514',
         max_tokens: maxTokens,
         system: deepResearch ? DEEP_RESEARCH_SYSTEM : undefined,

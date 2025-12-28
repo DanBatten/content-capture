@@ -1,15 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+// Lazy-initialized clients to avoid build-time errors
+let supabase: SupabaseClient | null = null;
+let openai: OpenAI | null = null;
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
-});
+function getSupabase() {
+  if (!supabase) {
+    supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+  }
+  return supabase;
+}
+
+function getOpenAI() {
+  if (!openai) {
+    openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY!,
+    });
+  }
+  return openai;
+}
 
 /**
  * Semantic search API using vector embeddings
@@ -25,7 +39,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate embedding for the query
-    const embeddingResponse = await openai.embeddings.create({
+    const embeddingResponse = await getOpenAI().embeddings.create({
       model: 'text-embedding-3-small',
       input: query,
       dimensions: 1536,
@@ -34,7 +48,7 @@ export async function POST(request: NextRequest) {
     const queryEmbedding = embeddingResponse.data[0].embedding;
 
     // Search using pgvector
-    const { data, error } = await supabase.rpc('search_content_semantic', {
+    const { data, error } = await getSupabase().rpc('search_content_semantic', {
       query_embedding: `[${queryEmbedding.join(',')}]`,
       match_threshold: threshold,
       match_count: limit,

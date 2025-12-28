@@ -1,20 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+// Lazy-initialized clients to avoid build-time errors
+let supabase: SupabaseClient | null = null;
+let anthropic: Anthropic | null = null;
+let openai: OpenAI | null = null;
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY!,
-});
+function getSupabase() {
+  if (!supabase) {
+    supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+  }
+  return supabase;
+}
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
-});
+function getAnthropic() {
+  if (!anthropic) {
+    anthropic = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY!,
+    });
+  }
+  return anthropic;
+}
+
+function getOpenAI() {
+  if (!openai) {
+    openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY!,
+    });
+  }
+  return openai;
+}
 
 const RAG_SYSTEM_PROMPT = `You are a knowledge synthesis assistant with access to the user's personal knowledge base. This archive contains research papers, articles, tweets, and content they've saved because they found it valuable.
 
@@ -85,7 +105,7 @@ export async function POST(request: NextRequest) {
     const systemPrompt = deepResearch ? DEEP_RESEARCH_PROMPT : RAG_SYSTEM_PROMPT;
 
     // 1. Generate embedding for the user's question
-    const embeddingResponse = await openai.embeddings.create({
+    const embeddingResponse = await getOpenAI().embeddings.create({
       model: 'text-embedding-3-small',
       input: message,
       dimensions: 1536,
@@ -94,7 +114,7 @@ export async function POST(request: NextRequest) {
     const queryEmbedding = embeddingResponse.data[0].embedding;
 
     // 2. Retrieve relevant context from the knowledge base
-    const { data: results, error: searchError } = await supabase.rpc(
+    const { data: results, error: searchError } = await getSupabase().rpc(
       'search_content_semantic',
       {
         query_embedding: `[${queryEmbedding.join(',')}]`,
@@ -173,7 +193,7 @@ My question: ${message}`;
     ];
 
     // 5. Generate response with Claude
-    const response = await anthropic.messages.create({
+    const response = await getAnthropic().messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: maxTokens,
       system: systemPrompt,
