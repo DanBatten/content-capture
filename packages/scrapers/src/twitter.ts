@@ -1,5 +1,5 @@
 import { ApifyClient } from 'apify-client';
-import type { ExtractedContent, MediaItem, VideoItem } from '@content-capture/core';
+import type { ExtractedContent, MediaItem, VideoItem, ThreadContext } from '@content-capture/core';
 import type { ContentScraper, ScraperOptions } from './types';
 
 const TWITTER_URL_PATTERNS = [
@@ -205,6 +205,59 @@ export class TwitterScraper implements ContentScraper {
   }
 
   /**
+   * Fetch parent tweets in a thread (walking up the chain)
+   * Only follows replies from the same author to capture intentional threads
+   */
+  async fetchThreadParents(
+    tweetId: string,
+    authorHandle: string,
+    maxDepth: number = 20
+  ): Promise<ExtractedContent[]> {
+    const thread: ExtractedContent[] = [];
+    let currentId = tweetId;
+    const normalizedAuthor = authorHandle.replace('@', '').toLowerCase();
+
+    while (thread.length < maxDepth) {
+      // Construct URL for the current tweet
+      const url = `https://x.com/${normalizedAuthor}/status/${currentId}`;
+
+      try {
+        const tweet = await this.scrape(url);
+        if (!tweet) break;
+
+        // Check if this tweet is a reply by the same author
+        const parentId = tweet.platformData?.replyingToStatus as string | undefined;
+        const replyingTo = (tweet.platformData?.replyingTo as string | undefined)?.toLowerCase();
+
+        // Add to the front of the array (building from newest to oldest)
+        thread.unshift(tweet);
+
+        // Stop if:
+        // - No parent tweet (this is the thread root)
+        // - Parent is by a different author (not a self-thread)
+        if (!parentId || replyingTo !== normalizedAuthor) {
+          break;
+        }
+
+        currentId = parentId;
+      } catch (err) {
+        console.warn(`Failed to fetch thread parent ${currentId}:`, err);
+        break;
+      }
+    }
+
+    return thread;
+  }
+
+  /**
+   * Extract tweet ID from URL
+   */
+  static extractTweetId(url: string): string | null {
+    const match = url.match(/(?:twitter|x)\.com\/\w+\/status\/(\d+)/i);
+    return match ? match[1] : null;
+  }
+
+  /**
    * Fetch tweet from FxTwitter API (free, no auth required)
    */
   private async fetchFromFxTwitter(username: string, tweetId: string): Promise<ExtractedContent | null> {
@@ -258,6 +311,13 @@ export class TwitterScraper implements ContentScraper {
       publishedAt = new Date(tweet.created_timestamp * 1000).toISOString();
     }
 
+    // Build thread context if this is a reply
+    const threadContext: ThreadContext = {
+      parentTweetId: tweet.replying_to_status,
+      parentAuthor: tweet.replying_to,
+      isThreadContinuation: !!(tweet.replying_to_status && tweet.replying_to === tweet.author.screen_name),
+    };
+
     return {
       title: tweet.text.slice(0, 100) + (tweet.text.length > 100 ? '...' : ''),
       description: tweet.text,
@@ -275,7 +335,10 @@ export class TwitterScraper implements ContentScraper {
         viewCount: tweet.views,
         bookmarkCount: tweet.bookmarks,
         profileImageUrl: tweet.author.avatar_url,
+        replyingTo: tweet.replying_to,
+        replyingToStatus: tweet.replying_to_status,
       },
+      threadContext,
     };
   }
 

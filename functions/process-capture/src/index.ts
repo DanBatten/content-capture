@@ -2,9 +2,20 @@ import * as functions from '@google-cloud/functions-framework';
 import { CloudEvent } from '@google-cloud/functions-framework';
 import { createClient } from '@supabase/supabase-js';
 import { Storage } from '@google-cloud/storage';
-import type { CaptureMessage, ExtractedContent, AnalysisResult } from '@content-capture/core';
-import { createScraperRegistry, getScraperForSourceType } from '@content-capture/scrapers';
-import { createAnalyzer } from '@content-capture/analyzer';
+import { PubSub } from '@google-cloud/pubsub';
+import type {
+  CaptureMessage,
+  ExtractedContent,
+  AnalysisResult,
+  SourceType,
+} from '@content-capture/core';
+import {
+  createScraperRegistry,
+  getScraperForSourceType,
+  TwitterScraper,
+  extractLinksFromText,
+} from '@content-capture/scrapers';
+import { createAnalyzer, createEmbeddingsGenerator } from '@content-capture/analyzer';
 
 // Initialize clients
 const supabase = createClient(
@@ -15,9 +26,25 @@ const supabase = createClient(
 const storage = new Storage();
 const bucketName = process.env.GCS_BUCKET_NAME || 'content-capture-media';
 
-// Initialize scraper registry and analyzer
+const pubsub = new PubSub();
+const topicName = process.env.GOOGLE_CLOUD_PUBSUB_TOPIC || 'content-capture';
+
+// Initialize scraper registry, analyzer, and embeddings generator
 const scraperRegistry = createScraperRegistry();
 const analyzer = createAnalyzer();
+
+// Embeddings generator is optional (requires OPENAI_API_KEY)
+let embeddingsGenerator: ReturnType<typeof createEmbeddingsGenerator> | null = null;
+if (process.env.OPENAI_API_KEY) {
+  try {
+    embeddingsGenerator = createEmbeddingsGenerator();
+    console.log('Embeddings generator initialized');
+  } catch (err) {
+    console.warn('Failed to initialize embeddings generator:', err);
+  }
+} else {
+  console.warn('OPENAI_API_KEY not set - embeddings disabled');
+}
 
 interface PubSubData {
   // Gen2 Eventarc format - data is at root level with snake_case keys
@@ -89,6 +116,25 @@ export async function processCapture(
     const content = await scraper.scrape(url);
     console.log(`Scraped: "${content.title}" with ${content.images.length} images`);
 
+    // Step 1.5: Process thread if Twitter
+    let threadRootId: string | undefined;
+    let threadPosition = 0;
+    let parentId: string | undefined;
+
+    if (sourceType === 'twitter' && content.threadContext?.isThreadContinuation) {
+      console.log('Step 1.5: Processing Twitter thread...');
+      const threadResult = await processThread(captureId, content, url);
+      threadRootId = threadResult.threadRootId;
+      threadPosition = threadResult.threadPosition;
+      parentId = threadResult.parentId;
+    }
+
+    // Step 1.6: Extract and queue linked URLs
+    if (sourceType === 'twitter') {
+      console.log('Step 1.6: Extracting links from content...');
+      await processLinks(captureId, content);
+    }
+
     // Step 2: Upload media to Cloud Storage
     console.log('Step 2: Uploading media...');
     const processedMedia = await processMedia(captureId, content);
@@ -98,9 +144,37 @@ export async function processCapture(
     const analysis = await analyzer.analyze(content, sourceType, url);
     console.log(`Analysis: ${analysis.topics.join(', ')}`);
 
+    // Step 3.5: Generate embedding
+    let embedding: number[] | undefined;
+    if (embeddingsGenerator) {
+      console.log('Step 3.5: Generating embedding...');
+      try {
+        embedding = await embeddingsGenerator.generateContentEmbedding({
+          title: content.title,
+          description: content.description,
+          bodyText: content.bodyText,
+          summary: analysis.summary,
+          topics: analysis.topics,
+          authorName: content.authorName,
+        });
+        console.log(`Generated embedding with ${embedding.length} dimensions`);
+      } catch (err) {
+        console.warn('Failed to generate embedding:', err);
+      }
+    }
+
     // Step 4: Save to Supabase
     console.log('Step 4: Saving to database...');
-    await saveToDatabase(captureId, url, content, analysis, processedMedia, notes);
+    await saveToDatabase(
+      captureId,
+      url,
+      content,
+      analysis,
+      processedMedia,
+      notes,
+      { threadRootId, threadPosition, parentId },
+      embedding
+    );
 
     const duration = Date.now() - startTime;
     console.log(`Capture ${captureId} completed in ${duration}ms`);
@@ -279,7 +353,9 @@ async function saveToDatabase(
   content: ExtractedContent,
   analysis: AnalysisResult,
   media: { images: ProcessedMedia[]; videos: ProcessedMedia[]; screenshot?: string },
-  notes?: string
+  notes?: string,
+  threadInfo?: { threadRootId?: string; threadPosition?: number; parentId?: string },
+  embedding?: number[]
 ): Promise<void> {
   const { error } = await supabase
     .from('content_items')
@@ -303,6 +379,21 @@ async function saveToDatabase(
       use_cases: analysis.useCases,
       content_type: analysis.contentType,
 
+      // Thread info
+      ...(threadInfo?.threadRootId ? { thread_root_id: threadInfo.threadRootId } : {}),
+      ...(threadInfo?.parentId ? { parent_id: threadInfo.parentId } : {}),
+      ...(threadInfo?.threadPosition !== undefined
+        ? { thread_position: threadInfo.threadPosition }
+        : {}),
+
+      // Embedding (pgvector format)
+      ...(embedding
+        ? {
+            embedding: `[${embedding.join(',')}]`,
+            embedding_generated_at: new Date().toISOString(),
+          }
+        : {}),
+
       // Platform metadata
       platform_data: {
         ...content.platformData,
@@ -320,6 +411,237 @@ async function saveToDatabase(
   if (error) {
     throw new Error(`Database save failed: ${error.message}`);
   }
+}
+
+/**
+ * Process Twitter thread - find and capture parent tweets
+ */
+async function processThread(
+  captureId: string,
+  content: ExtractedContent,
+  url: string
+): Promise<{ threadRootId?: string; threadPosition: number; parentId?: string }> {
+  const authorHandle = content.authorHandle;
+  const parentTweetId = content.threadContext?.parentTweetId;
+
+  if (!authorHandle || !parentTweetId) {
+    return { threadPosition: 0 };
+  }
+
+  // Get the Twitter scraper
+  const twitterScraper = scraperRegistry.getByName('twitter') as TwitterScraper | undefined;
+  if (!twitterScraper) {
+    console.warn('Twitter scraper not available for thread processing');
+    return { threadPosition: 0 };
+  }
+
+  // Check if parent tweet already exists in our database
+  const { data: existingParent } = await supabase
+    .from('content_items')
+    .select('id, thread_root_id, thread_position')
+    .eq('platform_data->>tweetId', parentTweetId)
+    .single();
+
+  if (existingParent) {
+    // Parent exists - link to it
+    const threadRootId = existingParent.thread_root_id || existingParent.id;
+    const threadPosition = (existingParent.thread_position || 0) + 1;
+    return {
+      parentId: existingParent.id,
+      threadRootId,
+      threadPosition,
+    };
+  }
+
+  // Parent doesn't exist - fetch and create capture for it
+  try {
+    const parentUrl = `https://x.com/${authorHandle.replace('@', '')}/status/${parentTweetId}`;
+
+    // Create a pending capture for the parent
+    const { data: parentCapture, error: createError } = await supabase
+      .from('content_items')
+      .insert({
+        source_url: parentUrl,
+        source_type: 'twitter',
+        status: 'pending',
+        captured_at: new Date().toISOString(),
+        images: [],
+        videos: [],
+        topics: [],
+        disciplines: [],
+        use_cases: [],
+        platform_data: { queued_from_thread: captureId },
+      })
+      .select('id')
+      .single();
+
+    if (createError) {
+      // Might be a duplicate - check again
+      const { data: retryParent } = await supabase
+        .from('content_items')
+        .select('id, thread_root_id, thread_position')
+        .eq('source_url', parentUrl)
+        .single();
+
+      if (retryParent) {
+        const threadRootId = retryParent.thread_root_id || retryParent.id;
+        return {
+          parentId: retryParent.id,
+          threadRootId,
+          threadPosition: (retryParent.thread_position || 0) + 1,
+        };
+      }
+      console.warn('Failed to create parent capture:', createError);
+      return { threadPosition: 0 };
+    }
+
+    // Queue the parent for processing
+    const message: CaptureMessage = {
+      captureId: parentCapture.id,
+      url: parentUrl,
+      sourceType: 'twitter',
+    };
+
+    await pubsub.topic(topicName).publishMessage({
+      data: Buffer.from(JSON.stringify(message)),
+      attributes: {
+        sourceType: 'twitter',
+        captureId: parentCapture.id,
+        isThreadParent: 'true',
+      },
+    });
+
+    console.log(`Queued parent tweet ${parentTweetId} for processing`);
+
+    // Return thread info - parent will be the root for now
+    // (will be updated when parent is processed)
+    return {
+      parentId: parentCapture.id,
+      threadRootId: parentCapture.id,
+      threadPosition: 1,
+    };
+  } catch (err) {
+    console.warn('Error processing thread parent:', err);
+    return { threadPosition: 0 };
+  }
+}
+
+/**
+ * Extract links from content and create content_links records
+ */
+async function processLinks(
+  captureId: string,
+  content: ExtractedContent
+): Promise<void> {
+  const text = content.bodyText || content.description || '';
+  const links = extractLinksFromText(text);
+
+  if (links.length === 0) {
+    console.log('No external links found in content');
+    return;
+  }
+
+  console.log(`Found ${links.length} external links to process`);
+
+  for (const link of links) {
+    try {
+      // Check if we've already captured this URL
+      const { data: existingCapture } = await supabase
+        .from('content_items')
+        .select('id')
+        .eq('source_url', link)
+        .single();
+
+      // Create the content_links record
+      const { error: linkError } = await supabase.from('content_links').insert({
+        source_content_id: captureId,
+        target_content_id: existingCapture?.id || null,
+        url: link,
+        link_type: 'embedded',
+        status: existingCapture ? 'complete' : 'pending',
+        processed_at: existingCapture ? new Date().toISOString() : null,
+      });
+
+      if (linkError) {
+        // Might be duplicate - ignore
+        if (!linkError.message.includes('unique')) {
+          console.warn(`Failed to create link record for ${link}:`, linkError);
+        }
+        continue;
+      }
+
+      // If not already captured, queue it for processing
+      if (!existingCapture) {
+        // Detect source type for the linked URL
+        const linkedSourceType = detectSourceType(link);
+
+        // Create pending capture
+        const { data: newCapture, error: captureError } = await supabase
+          .from('content_items')
+          .insert({
+            source_url: link,
+            source_type: linkedSourceType,
+            status: 'pending',
+            captured_at: new Date().toISOString(),
+            images: [],
+            videos: [],
+            topics: [],
+            disciplines: [],
+            use_cases: [],
+            platform_data: { linked_from: captureId },
+          })
+          .select('id')
+          .single();
+
+        if (captureError) {
+          console.warn(`Failed to create capture for linked URL ${link}:`, captureError);
+          continue;
+        }
+
+        // Update content_links with target
+        await supabase
+          .from('content_links')
+          .update({
+            target_content_id: newCapture.id,
+            status: 'processing',
+          })
+          .eq('source_content_id', captureId)
+          .eq('url', link);
+
+        // Queue for processing
+        const message: CaptureMessage = {
+          captureId: newCapture.id,
+          url: link,
+          sourceType: linkedSourceType,
+        };
+
+        await pubsub.topic(topicName).publishMessage({
+          data: Buffer.from(JSON.stringify(message)),
+          attributes: {
+            sourceType: linkedSourceType,
+            captureId: newCapture.id,
+            linkedFrom: captureId,
+          },
+        });
+
+        console.log(`Queued linked URL for processing: ${link}`);
+      }
+    } catch (err) {
+      console.warn(`Error processing link ${link}:`, err);
+    }
+  }
+}
+
+/**
+ * Detect source type from URL
+ */
+function detectSourceType(url: string): SourceType {
+  const lowerUrl = url.toLowerCase();
+  if (lowerUrl.includes('twitter.com') || lowerUrl.includes('x.com')) return 'twitter';
+  if (lowerUrl.includes('instagram.com')) return 'instagram';
+  if (lowerUrl.includes('linkedin.com')) return 'linkedin';
+  if (lowerUrl.includes('pinterest.com') || lowerUrl.includes('pin.it')) return 'pinterest';
+  return 'web';
 }
 
 // Register the function with the Functions Framework for Gen2
