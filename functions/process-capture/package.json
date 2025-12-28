@@ -11,10 +11,13 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",
     "@google-cloud/functions-framework": "^3.4.2",
+    "@google-cloud/pubsub": "^4.5.0",
     "@google-cloud/storage": "^7.14.0",
     "@supabase/supabase-js": "^2.47.10",
     "apify-client": "^2.11.0",
     "cheerio": "^1.0.0",
+    "openai": "^4.73.0",
+    "pdf-parse": "^1.1.1",
     "zod": "^3.24.1"
   },
   "devDependencies": {

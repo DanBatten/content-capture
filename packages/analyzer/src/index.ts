@@ -7,6 +7,7 @@ import {
 } from './prompts';
 
 export * from './prompts';
+export * from './embeddings';
 
 export interface AnalyzerConfig {
   apiKey?: string;

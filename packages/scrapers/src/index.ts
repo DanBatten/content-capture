@@ -3,11 +3,14 @@ import type { ContentScraper } from './types';
 import { GenericScraper } from './generic';
 import { TwitterScraper } from './twitter';
 import { InstagramScraper } from './instagram';
+import { PdfScraper } from './pdf';
 
 export * from './types';
 export { GenericScraper } from './generic';
 export { TwitterScraper } from './twitter';
 export { InstagramScraper } from './instagram';
+export { PdfScraper } from './pdf';
+export * from './utils/link-extractor';
 
 /**
  * Scraper registry - manages all available scrapers
@@ -49,12 +52,15 @@ export class ScraperRegistry {
  */
 export function createScraperRegistry(): ScraperRegistry {
   const apifyToken = process.env.APIFY_API_TOKEN;
-  
+
   const registry = new ScraperRegistry(apifyToken);
+
+  // PDF scraper (no API needed)
+  registry.register(new PdfScraper());
 
   if (apifyToken) {
     console.log('Apify configured - screenshots and social scrapers enabled');
-    
+
     try {
       registry.register(new TwitterScraper(apifyToken));
     } catch (e) {

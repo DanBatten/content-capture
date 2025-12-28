@@ -74,6 +74,12 @@ export interface CaptureResponse {
   sourceType: SourceType;
 }
 
+export interface ThreadContext {
+  parentTweetId?: string;
+  parentAuthor?: string;
+  isThreadContinuation: boolean;
+}
+
 export interface ExtractedContent {
   title?: string;
   description?: string;
@@ -85,6 +91,7 @@ export interface ExtractedContent {
   videos: VideoItem[];
   screenshot?: string; // URL of page screenshot
   platformData?: Record<string, unknown>;
+  threadContext?: ThreadContext;
 }
 
 export interface AnalysisResult {

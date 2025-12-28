@@ -21,7 +21,8 @@
   "dependencies": {
     "@content-capture/core": "*",
     "cheerio": "^1.0.0",
-    "apify-client": "^2.9.6"
+    "apify-client": "^2.9.6",
+    "pdf-parse": "^1.1.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
