@@ -254,7 +254,7 @@ export class TwitterScraper implements ContentScraper {
    */
   static extractTweetId(url: string): string | null {
     const match = url.match(/(?:twitter|x)\.com\/\w+\/status\/(\d+)/i);
-    return match ? match[1] : null;
+    return match?.[1] ?? null;
   }
 
   /**

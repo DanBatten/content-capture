@@ -14,7 +14,7 @@ export default function ChatPage() {
             <div className="flex items-center gap-4">
               <Link href="/archive" className="flex items-center gap-3 group">
                 <div className="w-8 h-8 flex items-center justify-center">
-                  <FolderIcon size={28} />
+                  <FolderIcon size="md" />
                 </div>
                 <span className="font-serif text-lg text-[var(--foreground)] group-hover:text-[var(--accent)] transition-colors">
                   Archive

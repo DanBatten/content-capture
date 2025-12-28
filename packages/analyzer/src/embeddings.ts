@@ -51,7 +51,11 @@ export class EmbeddingsGenerator {
       dimensions: this.dimensions,
     });
 
-    return response.data[0].embedding;
+    const embedding = response.data[0]?.embedding;
+    if (!embedding) {
+      throw new Error('No embedding returned from OpenAI');
+    }
+    return embedding;
   }
 
   /**
