@@ -626,7 +626,7 @@ export function ContentModal({ item, onClose }: ContentModalProps) {
               )}
 
               {/* X Article full content - shown prominently for articles */}
-              {item.platform_data?.isArticle && item.body_text && (
+              {Boolean(item.platform_data?.isArticle) && item.body_text && (
                 <div className="mb-6 sm:mb-8">
                   <h3 className="font-mono-ui text-xs uppercase tracking-widest text-[var(--foreground-muted)] mb-3">Article Content</h3>
                   <div className="prose prose-neutral max-w-none">
