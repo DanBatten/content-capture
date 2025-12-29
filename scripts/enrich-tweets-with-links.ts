@@ -72,6 +72,15 @@ function isPdfUrl(url: string): boolean {
   return lowerUrl.endsWith('.pdf') || lowerUrl.includes('.pdf?') || lowerUrl.includes('type=pdf');
 }
 
+function isArxivAbstractUrl(url: string): boolean {
+  return /arxiv\.org\/abs\//.test(url);
+}
+
+function arxivAbstractToPdfUrl(url: string): string {
+  // Convert https://arxiv.org/abs/2512.18552 to https://arxiv.org/pdf/2512.18552.pdf
+  return url.replace('/abs/', '/pdf/') + '.pdf';
+}
+
 // ============ URL Expansion ============
 
 async function expandShortUrl(url: string): Promise<string> {
@@ -239,7 +248,99 @@ async function scrapePdf(url: string): Promise<ScrapedContent> {
   return result;
 }
 
+async function scrapeArxiv(url: string): Promise<ScrapedContent> {
+  const result: ScrapedContent = {
+    url,
+    title: null,
+    description: null,
+    bodyText: null,
+    contentType: 'pdf',
+    scrapedAt: new Date().toISOString(),
+  };
+
+  try {
+    // First, get metadata from the abstract page
+    const abstractResponse = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+        'Accept': 'text/html,application/xhtml+xml',
+      },
+    });
+
+    if (abstractResponse.ok) {
+      const html = await abstractResponse.text();
+      const $ = cheerio.load(html);
+
+      // Extract arxiv-specific metadata
+      result.title = $('meta[name="citation_title"]').attr('content')
+        || $('h1.title').text().replace('Title:', '').trim()
+        || null;
+
+      // Get authors
+      const authors = $('meta[name="citation_author"]')
+        .map((_, el) => $(el).attr('content'))
+        .get()
+        .join(', ');
+
+      // Get abstract
+      const abstract = $('meta[name="citation_abstract"]').attr('content')
+        || $('blockquote.abstract').text().replace('Abstract:', '').trim()
+        || null;
+
+      result.description = abstract;
+
+      console.log(`      [ArXiv] Got metadata: "${result.title?.slice(0, 50)}..." by ${authors.slice(0, 50)}`);
+    }
+
+    // Now get the full PDF content
+    const pdfUrl = arxivAbstractToPdfUrl(url);
+    console.log(`      [ArXiv] Downloading PDF: ${pdfUrl}`);
+
+    const pdfParse = (await import('pdf-parse')).default;
+
+    const pdfResponse = await fetch(pdfUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; ContentCapture/1.0)',
+      },
+    });
+
+    if (!pdfResponse.ok) {
+      result.error = `PDF HTTP ${pdfResponse.status}`;
+      // Still return with metadata if we have it
+      if (result.description) {
+        result.bodyText = `Abstract: ${result.description}`;
+      }
+      return result;
+    }
+
+    const buffer = Buffer.from(await pdfResponse.arrayBuffer());
+    const data = await pdfParse(buffer);
+
+    // Combine abstract with full text
+    const fullText = data.text
+      .replace(/\s+/g, ' ')
+      .replace(/\n\s*\n/g, '\n\n')
+      .trim();
+
+    // Structure the content with abstract first, then full paper
+    result.bodyText = result.description
+      ? `ABSTRACT:\n${result.description}\n\nFULL PAPER:\n${fullText.slice(0, 25000)}`
+      : fullText.slice(0, 25000);
+
+    console.log(`      [ArXiv] Extracted ${fullText.length} chars from PDF`);
+
+  } catch (err) {
+    result.error = err instanceof Error ? err.message : 'Unknown error';
+  }
+
+  return result;
+}
+
 async function scrapeUrl(url: string): Promise<ScrapedContent> {
+  // Handle arxiv abstract pages specially - fetch the actual PDF
+  if (isArxivAbstractUrl(url)) {
+    return await scrapeArxiv(url);
+  }
   if (isPdfUrl(url)) {
     return await scrapePdf(url);
   }
