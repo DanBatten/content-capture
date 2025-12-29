@@ -14,6 +14,11 @@ import {
   getScraperForSourceType,
   TwitterScraper,
   extractLinksFromText,
+  fetchThreadData,
+  extractTweetId,
+  scrapeLinks,
+  type ThreadData,
+  type ScrapedLinkContent,
 } from '@content-capture/scrapers';
 import { createAnalyzer, createEmbeddingsGenerator } from '@content-capture/analyzer';
 
@@ -116,23 +121,24 @@ export async function processCapture(
     const content = await scraper.scrape(url);
     console.log(`Scraped: "${content.title}" with ${content.images.length} images`);
 
-    // Step 1.5: Process thread if Twitter
+    // Step 1.5: Process thread if Twitter (for parent linking)
     let threadRootId: string | undefined;
     let threadPosition = 0;
     let parentId: string | undefined;
 
     if (sourceType === 'twitter' && content.threadContext?.isThreadContinuation) {
-      console.log('Step 1.5: Processing Twitter thread...');
+      console.log('Step 1.5: Processing Twitter thread parent...');
       const threadResult = await processThread(captureId, content, url);
       threadRootId = threadResult.threadRootId;
       threadPosition = threadResult.threadPosition;
       parentId = threadResult.parentId;
     }
 
-    // Step 1.6: Extract and queue linked URLs
+    // Step 1.6: Enrich Twitter content (fetch thread + scrape links)
+    let twitterEnrichment: { threadData: ThreadData | null; linkedContent: ScrapedLinkContent[] } | null = null;
     if (sourceType === 'twitter') {
-      console.log('Step 1.6: Extracting links from content...');
-      await processLinks(captureId, content);
+      console.log('Step 1.6: Enriching Twitter content...');
+      twitterEnrichment = await enrichTwitterContent(content, url);
     }
 
     // Step 2: Upload media to Cloud Storage
@@ -173,7 +179,8 @@ export async function processCapture(
       processedMedia,
       notes,
       { threadRootId, threadPosition, parentId },
-      embedding
+      embedding,
+      twitterEnrichment
     );
 
     const duration = Date.now() - startTime;
@@ -355,8 +362,28 @@ async function saveToDatabase(
   media: { images: ProcessedMedia[]; videos: ProcessedMedia[]; screenshot?: string },
   notes?: string,
   threadInfo?: { threadRootId?: string; threadPosition?: number; parentId?: string },
-  embedding?: number[]
+  embedding?: number[],
+  twitterEnrichment?: { threadData: ThreadData | null; linkedContent: ScrapedLinkContent[] } | null
 ): Promise<void> {
+  // Build platform_data with enrichment
+  const platformData: Record<string, unknown> = {
+    ...content.platformData,
+    ...(notes ? { user_notes: notes } : {}),
+    ...(media.screenshot ? { screenshot: media.screenshot } : {}),
+  };
+
+  // Add Twitter enrichment data if available
+  if (twitterEnrichment) {
+    if (twitterEnrichment.threadData) {
+      platformData.thread = twitterEnrichment.threadData;
+      platformData.threadLength = twitterEnrichment.threadData.tweetCount;
+    }
+    if (twitterEnrichment.linkedContent.length > 0) {
+      platformData.linked_content = twitterEnrichment.linkedContent;
+    }
+    platformData.enriched_at = new Date().toISOString();
+  }
+
   const { error } = await supabase
     .from('content_items')
     .update({
@@ -394,12 +421,8 @@ async function saveToDatabase(
           }
         : {}),
 
-      // Platform metadata
-      platform_data: {
-        ...content.platformData,
-        ...(notes ? { user_notes: notes } : {}),
-        ...(media.screenshot ? { screenshot: media.screenshot } : {}),
-      },
+      // Platform metadata (now includes thread and linked content)
+      platform_data: platformData,
 
       // Status
       status: 'complete',
@@ -527,109 +550,49 @@ async function processThread(
 }
 
 /**
- * Extract links from content and create content_links records
+ * Fetch thread data and scrape linked content for inline storage
+ * Returns enriched data to be stored in platform_data
  */
-async function processLinks(
-  captureId: string,
-  content: ExtractedContent
-): Promise<void> {
-  const text = content.bodyText || content.description || '';
-  const links = extractLinksFromText(text);
+async function enrichTwitterContent(
+  content: ExtractedContent,
+  url: string
+): Promise<{ threadData: ThreadData | null; linkedContent: ScrapedLinkContent[] }> {
+  const tweetId = extractTweetId(url);
+  const authorHandle = content.authorHandle;
 
-  if (links.length === 0) {
-    console.log('No external links found in content');
-    return;
-  }
+  let threadData: ThreadData | null = null;
+  let allLinks: string[] = [];
 
-  console.log(`Found ${links.length} external links to process`);
+  // Fetch thread data if we have the required info
+  if (tweetId && authorHandle) {
+    console.log('Fetching thread data...');
+    threadData = await fetchThreadData(tweetId, authorHandle);
 
-  for (const link of links) {
-    try {
-      // Check if we've already captured this URL
-      const { data: existingCapture } = await supabase
-        .from('content_items')
-        .select('id')
-        .eq('source_url', link)
-        .single();
-
-      // Create the content_links record
-      const { error: linkError } = await supabase.from('content_links').insert({
-        source_content_id: captureId,
-        target_content_id: existingCapture?.id || null,
-        url: link,
-        link_type: 'embedded',
-        status: existingCapture ? 'complete' : 'pending',
-        processed_at: existingCapture ? new Date().toISOString() : null,
-      });
-
-      if (linkError) {
-        // Might be duplicate - ignore
-        if (!linkError.message.includes('unique')) {
-          console.warn(`Failed to create link record for ${link}:`, linkError);
-        }
-        continue;
-      }
-
-      // If not already captured, queue it for processing
-      if (!existingCapture) {
-        // Detect source type for the linked URL
-        const linkedSourceType = detectSourceType(link);
-
-        // Create pending capture
-        const { data: newCapture, error: captureError } = await supabase
-          .from('content_items')
-          .insert({
-            source_url: link,
-            source_type: linkedSourceType,
-            status: 'pending',
-            captured_at: new Date().toISOString(),
-            images: [],
-            videos: [],
-            topics: [],
-            disciplines: [],
-            use_cases: [],
-            platform_data: { linked_from: captureId },
-          })
-          .select('id')
-          .single();
-
-        if (captureError) {
-          console.warn(`Failed to create capture for linked URL ${link}:`, captureError);
-          continue;
-        }
-
-        // Update content_links with target
-        await supabase
-          .from('content_links')
-          .update({
-            target_content_id: newCapture.id,
-            status: 'processing',
-          })
-          .eq('source_content_id', captureId)
-          .eq('url', link);
-
-        // Queue for processing
-        const message: CaptureMessage = {
-          captureId: newCapture.id,
-          url: link,
-          sourceType: linkedSourceType,
-        };
-
-        await pubsub.topic(topicName).publishMessage({
-          data: Buffer.from(JSON.stringify(message)),
-          attributes: {
-            sourceType: linkedSourceType,
-            captureId: newCapture.id,
-            linkedFrom: captureId,
-          },
-        });
-
-        console.log(`Queued linked URL for processing: ${link}`);
-      }
-    } catch (err) {
-      console.warn(`Error processing link ${link}:`, err);
+    if (threadData) {
+      console.log(`Found thread: ${threadData.tweetCount} tweets, ${threadData.links.length} links (via ${threadData.source})`);
+      allLinks.push(...threadData.links);
     }
   }
+
+  // Extract links from tweet body
+  const bodyText = content.bodyText || content.description || '';
+  const bodyLinks = extractLinksFromText(bodyText);
+  allLinks.push(...bodyLinks);
+
+  // Deduplicate links
+  allLinks = [...new Set(allLinks)];
+  console.log(`Total unique links to scrape: ${allLinks.length}`);
+
+  // Scrape linked content (limit to 5)
+  let linkedContent: ScrapedLinkContent[] = [];
+  if (allLinks.length > 0) {
+    console.log('Scraping linked content...');
+    linkedContent = await scrapeLinks(allLinks, 5, 500);
+    const successCount = linkedContent.filter(l => !l.error).length;
+    console.log(`Scraped ${successCount}/${linkedContent.length} links successfully`);
+  }
+
+  return { threadData, linkedContent };
 }
 
 /**

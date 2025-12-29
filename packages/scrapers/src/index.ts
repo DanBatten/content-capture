@@ -11,6 +11,8 @@ export { TwitterScraper } from './twitter';
 export { InstagramScraper } from './instagram';
 export { PdfScraper } from './pdf';
 export * from './utils/link-extractor';
+export * from './utils/thread-fetcher';
+export * from './utils/link-scraper';
 
 /**
  * Scraper registry - manages all available scrapers
