@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
     const {
       query,
       limit = 10,
-      threshold = 0.5,
+      threshold = 0.3,
       generateAnswer = true,
       returnSources = true,
       deepResearch = false,
@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
 
     // Configure based on mode
     const retrievalCount = deepResearch ? 20 : limit;
-    const matchThreshold = deepResearch ? 0.4 : threshold;
+    const matchThreshold = deepResearch ? 0.25 : threshold;
     const maxTokens = deepResearch ? 4096 : 2048;
     const contentLimit = deepResearch ? 2000 : 1000;
 

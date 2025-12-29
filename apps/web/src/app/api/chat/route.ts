@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
 
     // Configure based on mode
     const retrievalCount = deepResearch ? 20 : 10; // More context for deep research
-    const matchThreshold = deepResearch ? 0.4 : 0.5; // Lower threshold to catch more relevant content
+    const matchThreshold = deepResearch ? 0.25 : 0.3; // Lower threshold to catch more relevant content
     const maxTokens = deepResearch ? 4096 : 2048; // Longer responses for comprehensive analysis
     const systemPrompt = deepResearch ? DEEP_RESEARCH_PROMPT : RAG_SYSTEM_PROMPT;
 

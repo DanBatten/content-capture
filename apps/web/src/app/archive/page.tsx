@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import Link from 'next/link';
 import { ContentGrid } from '@/components/ContentGrid';
 import { Sidebar } from '@/components/Sidebar';
 import { ContentModal } from '@/components/ContentModal';
@@ -211,23 +212,34 @@ export default function ArchivePage() {
                 <FolderIcon size="sm" className="text-[var(--foreground)]" />
               </div>
 
-              {/* Mobile: Filter button only */}
-              <button
-                onClick={() => setIsSidebarOpen(true)}
-                className={`
-                  sm:hidden font-mono-ui text-sm transition-colors flex items-center gap-2
-                  ${hasActiveFilters 
-                    ? 'text-[var(--foreground)]' 
-                    : 'text-[var(--foreground-muted)] hover:text-[var(--foreground)]'
-                  }
-                `}
-              >
-                <span>{hasActiveFilters ? '[+]' : '[ ]'}</span>
-                <span>Filters</span>
-                {hasActiveFilters && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)]" />
-                )}
-              </button>
+              {/* Mobile: Chat + Filter buttons */}
+              <div className="sm:hidden flex items-center gap-3">
+                <Link
+                  href="/chat"
+                  className="font-mono-ui text-sm px-2.5 py-1 bg-[var(--accent)] text-white flex items-center gap-1.5"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />
+                  </svg>
+                  Chat
+                </Link>
+                <button
+                  onClick={() => setIsSidebarOpen(true)}
+                  className={`
+                    font-mono-ui text-sm transition-colors flex items-center gap-2
+                    ${hasActiveFilters
+                      ? 'text-[var(--foreground)]'
+                      : 'text-[var(--foreground-muted)] hover:text-[var(--foreground)]'
+                    }
+                  `}
+                >
+                  <span>{hasActiveFilters ? '[+]' : '[ ]'}</span>
+                  <span>Filters</span>
+                  {hasActiveFilters && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)]" />
+                  )}
+                </button>
+              </div>
 
               {/* Desktop: Search and filters */}
               <div className="hidden sm:block flex-1 max-w-2xl">
@@ -240,18 +252,24 @@ export default function ArchivePage() {
                 />
               </div>
 
-              {/* Right side stats - hidden until lg breakpoint to give search bar more room */}
-              <div className="hidden lg:flex items-center gap-4 text-[var(--foreground-muted)]">
-                <span className="font-mono-ui text-sm">
+              {/* Right side - Chat link and stats */}
+              <div className="hidden sm:flex items-center gap-4 text-[var(--foreground-muted)]">
+                <Link
+                  href="/chat"
+                  className="font-mono-ui text-sm px-3 py-1.5 bg-[var(--accent)] text-white hover:bg-[var(--accent)]/80 transition-colors flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />
+                  </svg>
+                  Chat
+                </Link>
+                <span className="hidden lg:inline font-mono-ui text-sm">
                   {total} items
                 </span>
                 {latestItemDate && (
-                  <>
-                    <span className="opacity-30">|</span>
-                    <span className="font-mono-ui text-sm">
-                      Last updated: {latestItemDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} {latestItemDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-                    </span>
-                  </>
+                  <span className="hidden xl:inline font-mono-ui text-sm">
+                    · Updated {latestItemDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  </span>
                 )}
               </div>
             </div>

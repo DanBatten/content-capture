@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useRef, useEffect, FormEvent, KeyboardEvent } from 'react';
+import { useState, useRef, useEffect, FormEvent, KeyboardEvent, useMemo } from 'react';
+import ReactMarkdown from 'react-markdown';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -16,6 +17,123 @@ interface Source {
   url: string;
   author: string | null;
 }
+
+// Process content to add links to source references
+function linkifySourceReferences(content: string, sources: Source[]): string {
+  if (!sources || sources.length === 0) return content;
+
+  let processedContent = content;
+
+  // Create patterns for each source
+  sources.forEach((source) => {
+    // Link author names (e.g., **Clem's observation** or Carlos Perez's finding)
+    if (source.author) {
+      // Match author name with possessive or standalone, with or without bold
+      const authorPatterns = [
+        // Bold with possessive: **Author's**
+        new RegExp(`\\*\\*(${escapeRegex(source.author)}(?:'s)?)\\*\\*`, 'gi'),
+        // Bold standalone: **Author**
+        new RegExp(`\\*\\*(${escapeRegex(source.author)})\\*\\*`, 'gi'),
+        // Non-bold with possessive at start of sentence or after space
+        new RegExp(`(^|\\s)(${escapeRegex(source.author)}'s)`, 'gi'),
+      ];
+
+      authorPatterns.forEach((pattern) => {
+        processedContent = processedContent.replace(pattern, (match, p1, p2) => {
+          // Handle different capture groups based on pattern
+          if (match.startsWith('**')) {
+            const text = match.slice(2, -2); // Remove ** from both ends
+            return `**[${text}](${source.url})**`;
+          } else {
+            // Non-bold match - p1 is whitespace/start, p2 is the name
+            return `${p1}[${p2}](${source.url})`;
+          }
+        });
+      });
+    }
+
+    // Link article/source titles when mentioned in quotes or as references
+    if (source.title) {
+      // Match quoted titles
+      const titlePattern = new RegExp(`"(${escapeRegex(source.title.slice(0, 50))}[^"]*)"`, 'gi');
+      processedContent = processedContent.replace(titlePattern, (match, p1) => {
+        return `"[${p1}](${source.url})"`;
+      });
+    }
+  });
+
+  return processedContent;
+}
+
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Custom components for markdown rendering
+const MarkdownComponents = {
+  h1: ({ children }: { children?: React.ReactNode }) => (
+    <h1 className="text-xl font-serif font-medium text-[var(--foreground)] mt-6 mb-3 first:mt-0">{children}</h1>
+  ),
+  h2: ({ children }: { children?: React.ReactNode }) => (
+    <h2 className="text-lg font-serif font-medium text-[var(--foreground)] mt-5 mb-2 first:mt-0">{children}</h2>
+  ),
+  h3: ({ children }: { children?: React.ReactNode }) => (
+    <h3 className="text-base font-serif font-medium text-[var(--foreground)] mt-4 mb-2 first:mt-0">{children}</h3>
+  ),
+  p: ({ children }: { children?: React.ReactNode }) => (
+    <p className="text-sm leading-relaxed mb-3 last:mb-0">{children}</p>
+  ),
+  ul: ({ children }: { children?: React.ReactNode }) => (
+    <ul className="list-disc list-outside ml-5 mb-3 space-y-1 text-sm">{children}</ul>
+  ),
+  ol: ({ children }: { children?: React.ReactNode }) => (
+    <ol className="list-decimal list-outside ml-5 mb-3 space-y-1 text-sm">{children}</ol>
+  ),
+  li: ({ children }: { children?: React.ReactNode }) => (
+    <li className="leading-relaxed">{children}</li>
+  ),
+  strong: ({ children }: { children?: React.ReactNode }) => (
+    <strong className="font-semibold text-[var(--foreground)]">{children}</strong>
+  ),
+  em: ({ children }: { children?: React.ReactNode }) => (
+    <em className="italic">{children}</em>
+  ),
+  a: ({ href, children }: { href?: string; children?: React.ReactNode }) => (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-[var(--accent)] hover:underline"
+    >
+      {children}
+    </a>
+  ),
+  blockquote: ({ children }: { children?: React.ReactNode }) => (
+    <blockquote className="border-l-2 border-[var(--accent)] pl-4 my-3 italic text-[var(--foreground-muted)]">
+      {children}
+    </blockquote>
+  ),
+  code: ({ children, className }: { children?: React.ReactNode; className?: string }) => {
+    const isInline = !className;
+    if (isInline) {
+      return (
+        <code className="bg-[var(--card-bg)] px-1.5 py-0.5 rounded text-xs font-mono">
+          {children}
+        </code>
+      );
+    }
+    return (
+      <code className="block bg-[var(--card-bg)] p-3 rounded text-xs font-mono overflow-x-auto my-3">
+        {children}
+      </code>
+    );
+  },
+  pre: ({ children }: { children?: React.ReactNode }) => (
+    <pre className="bg-[var(--card-bg)] p-3 rounded overflow-x-auto my-3 text-xs">
+      {children}
+    </pre>
+  ),
+};
 
 export function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -140,66 +258,7 @@ export function ChatInterface() {
         )}
 
         {messages.map((msg, i) => (
-          <div
-            key={i}
-            className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
-            <div
-              className={`max-w-[85%] ${
-                msg.role === 'user'
-                  ? 'bg-[var(--foreground)] text-[var(--background)] rounded-2xl rounded-br-sm px-4 py-3'
-                  : ''
-              }`}
-            >
-              {msg.role === 'assistant' && (
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)]" />
-                  <span className="font-mono-ui text-xs text-[var(--foreground-muted)]">
-                    Archive
-                    {msg.mode === 'deep_research' && (
-                      <span className="ml-2 text-[var(--accent)]">
-                        [Deep Research - {msg.sourcesAnalyzed} sources analyzed]
-                      </span>
-                    )}
-                    {msg.mode === 'standard' && msg.sourcesAnalyzed && (
-                      <span className="ml-2">
-                        [{msg.sourcesAnalyzed} sources]
-                      </span>
-                    )}
-                  </span>
-                </div>
-              )}
-              <p className="font-mono-ui text-sm whitespace-pre-wrap leading-relaxed">
-                {msg.content}
-              </p>
-              {msg.sources && msg.sources.length > 0 && (
-                <div className="mt-4 pt-3 border-t border-[var(--panel-border)]">
-                  <p className="font-mono-ui text-xs text-[var(--foreground-muted)] mb-2">
-                    Sources:
-                  </p>
-                  <div className="space-y-1">
-                    {msg.sources.map((source, j) => (
-                      <a
-                        key={j}
-                        href={source.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block font-mono-ui text-xs text-[var(--accent)] hover:underline truncate"
-                      >
-                        {source.title || source.url}
-                        {source.author && (
-                          <span className="text-[var(--foreground-muted)]">
-                            {' '}
-                            — {source.author}
-                          </span>
-                        )}
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
+          <MessageBubble key={i} message={msg} />
         ))}
 
         {isLoading && (
@@ -289,6 +348,78 @@ export function ChatInterface() {
             : 'Press Enter to send, Shift+Enter for new line'}
         </p>
       </form>
+    </div>
+  );
+}
+
+// Separate component for message bubble to use useMemo effectively
+function MessageBubble({ message }: { message: Message }) {
+  // Process content to add source links
+  const processedContent = useMemo(() => {
+    if (message.role === 'user' || !message.sources) {
+      return message.content;
+    }
+    return linkifySourceReferences(message.content, message.sources);
+  }, [message.content, message.sources, message.role]);
+
+  if (message.role === 'user') {
+    return (
+      <div className="flex justify-end">
+        <div className="max-w-[85%] bg-[var(--foreground)] text-[var(--background)] rounded-2xl rounded-br-sm px-4 py-3">
+          <p className="font-mono-ui text-sm whitespace-pre-wrap leading-relaxed">
+            {message.content}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex justify-start">
+      <div className="max-w-[85%]">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)]" />
+          <span className="font-mono-ui text-xs text-[var(--foreground-muted)]">
+            Archive
+            {message.mode === 'deep_research' && (
+              <span className="ml-2 text-[var(--accent)]">
+                [Deep Research - {message.sourcesAnalyzed} sources analyzed]
+              </span>
+            )}
+            {message.mode === 'standard' && message.sourcesAnalyzed && (
+              <span className="ml-2">[{message.sourcesAnalyzed} sources]</span>
+            )}
+          </span>
+        </div>
+
+        {/* Markdown rendered content */}
+        <div className="font-mono-ui text-[var(--foreground)] prose-sm">
+          <ReactMarkdown components={MarkdownComponents}>{processedContent}</ReactMarkdown>
+        </div>
+
+        {/* Sources section */}
+        {message.sources && message.sources.length > 0 && (
+          <div className="mt-4 pt-3 border-t border-[var(--panel-border)]">
+            <p className="font-mono-ui text-xs text-[var(--foreground-muted)] mb-2">Sources:</p>
+            <div className="space-y-1">
+              {message.sources.map((source, j) => (
+                <a
+                  key={j}
+                  href={source.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block font-mono-ui text-xs text-[var(--accent)] hover:underline truncate"
+                >
+                  {source.title || source.url}
+                  {source.author && (
+                    <span className="text-[var(--foreground-muted)]"> — {source.author}</span>
+                  )}
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

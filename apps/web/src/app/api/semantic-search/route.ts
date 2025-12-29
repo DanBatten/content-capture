@@ -32,7 +32,7 @@ function getOpenAI() {
  */
 export async function POST(request: NextRequest) {
   try {
-    const { query, limit = 10, threshold = 0.5 } = await request.json();
+    const { query, limit = 10, threshold = 0.3 } = await request.json();
 
     if (!query || typeof query !== 'string') {
       return NextResponse.json({ error: 'Query is required' }, { status: 400 });
