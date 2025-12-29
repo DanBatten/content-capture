@@ -52,6 +52,35 @@ function extractUrls(text: string): string[] {
   return [...new Set(matches.map(url => url.replace(/[.,;:!?)]+$/, '')))];
 }
 
+// Types for enriched content
+interface LinkedContent {
+  url: string;
+  title?: string | null;
+  description?: string | null;
+  bodyText?: string | null;
+  contentType?: 'article' | 'pdf' | 'arxiv';
+  error?: string;
+}
+
+interface ThreadData {
+  tweetCount: number;
+  texts: string[];
+  fullText: string;
+  source: string;
+}
+
+function isArxivUrl(url: string): boolean {
+  return url.includes('arxiv.org');
+}
+
+function getArxivPdfUrl(url: string): string {
+  // Convert abstract URL to PDF URL
+  if (url.includes('/abs/')) {
+    return url.replace('/abs/', '/pdf/') + '.pdf';
+  }
+  return url;
+}
+
 function getDomain(url: string): string {
   try {
     const domain = new URL(url).hostname.replace('www.', '');
@@ -233,6 +262,118 @@ function TextWithLinks({ text }: { text: string }) {
   );
 }
 
+// Linked content card with special PDF handling
+function LinkedContentCard({ content }: { content: LinkedContent }) {
+  const domain = getDomain(content.url);
+  const faviconUrl = getFaviconUrl(content.url);
+  const isPdf = content.contentType === 'pdf' || content.contentType === 'arxiv';
+  const isArxiv = isArxivUrl(content.url);
+  const pdfUrl = isArxiv ? getArxivPdfUrl(content.url) : content.url;
+
+  return (
+    <div className="rounded-xl border border-[var(--panel-border)] bg-[var(--card-bg)] overflow-hidden">
+      {/* Header with link */}
+      <a
+        href={content.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="group flex items-center gap-3 p-3 hover:bg-[var(--card-hover)] transition-colors border-b border-[var(--panel-border)]"
+      >
+        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[var(--accent)]/20 to-[var(--accent)]/5 flex items-center justify-center flex-shrink-0">
+          {isPdf ? (
+            <svg className="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm-1 2l5 5h-5V4zM8.5 12.5a1 1 0 011-1H10v3h-.5a1 1 0 01-1-1v-1zm3 0c0-.28.22-.5.5-.5h1a1.5 1.5 0 010 3h-1a.5.5 0 01-.5-.5v-2zm4 0a.5.5 0 011 0v.5h.5a.5.5 0 010 1H16v1a.5.5 0 01-1 0v-2.5z"/>
+            </svg>
+          ) : faviconUrl ? (
+            <img
+              src={faviconUrl}
+              alt={domain}
+              className="w-5 h-5 object-contain"
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            />
+          ) : (
+            <svg className="w-5 h-5 text-[var(--foreground-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+            </svg>
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-[var(--foreground)] truncate group-hover:text-[var(--accent-dark)] transition-colors">
+            {content.title || domain}
+          </p>
+          <p className="text-xs text-[var(--foreground-muted)] truncate">{domain}</p>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {isPdf && (
+            <a
+              href={pdfUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="px-2 py-1 text-xs font-mono-ui bg-red-500/10 text-red-600 rounded hover:bg-red-500/20 transition-colors"
+            >
+              PDF
+            </a>
+          )}
+          <svg className="w-4 h-4 text-[var(--foreground-muted)] group-hover:text-[var(--accent-dark)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+          </svg>
+        </div>
+      </a>
+
+      {/* Description/abstract preview */}
+      {content.description && (
+        <div className="px-3 py-2 bg-[var(--panel-bg)]/50">
+          <p className="text-xs text-[var(--foreground-muted)] line-clamp-3">
+            {content.description}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Thread text display component
+function ThreadTextDisplay({ thread }: { thread: ThreadData }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const previewLength = 500;
+  const needsTruncation = thread.fullText.length > previewLength;
+
+  return (
+    <div className="rounded-xl border border-[var(--panel-border)] bg-[var(--card-bg)] overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--panel-border)] bg-[var(--panel-bg)]/50">
+        <div className="flex items-center gap-2">
+          <svg className="w-4 h-4 text-[var(--accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+          </svg>
+          <span className="font-mono-ui text-xs uppercase tracking-widest text-[var(--foreground-muted)]">
+            Thread ({thread.tweetCount} tweets)
+          </span>
+        </div>
+        <span className="text-xs text-[var(--foreground-muted)] opacity-60">
+          via {thread.source}
+        </span>
+      </div>
+
+      {/* Thread content */}
+      <div className="p-4">
+        <div className={`text-sm text-[var(--foreground)] leading-relaxed whitespace-pre-wrap ${!isExpanded && needsTruncation ? 'line-clamp-[10]' : ''}`}>
+          {isExpanded || !needsTruncation ? thread.fullText : thread.fullText.slice(0, previewLength) + '...'}
+        </div>
+        {needsTruncation && (
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="mt-3 font-mono-ui text-xs text-[var(--accent-dark)] hover:text-[var(--foreground)] transition-colors"
+          >
+            {isExpanded ? '[ collapse thread ]' : '[ read full thread ]'}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // Horizontal swipeable gallery for mobile
 function MobileGallery({ media }: { media: Array<{ type: 'video' | 'image'; url: string; thumbnail?: string }> }) {
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -333,6 +474,29 @@ export function ContentModal({ item, onClose }: ContentModalProps) {
     if (!item?.body_text) return [];
     return extractUrls(item.body_text);
   }, [item?.body_text]);
+
+  // Extract thread data from platform_data
+  const threadData = useMemo((): ThreadData | null => {
+    const thread = item?.platform_data?.thread as ThreadData | undefined;
+    if (!thread || thread.tweetCount <= 1) return null;
+    return thread;
+  }, [item?.platform_data]);
+
+  // Extract linked content from platform_data
+  const linkedContent = useMemo((): LinkedContent[] => {
+    const links = item?.platform_data?.linked_content as LinkedContent[] | undefined;
+    if (!links || links.length === 0) return [];
+    // Filter out errored links and sort PDFs/arxiv first
+    return links
+      .filter(l => !l.error && l.url)
+      .sort((a, b) => {
+        const aIsPdf = a.contentType === 'pdf' || a.contentType === 'arxiv';
+        const bIsPdf = b.contentType === 'pdf' || b.contentType === 'arxiv';
+        if (aIsPdf && !bIsPdf) return -1;
+        if (!aIsPdf && bIsPdf) return 1;
+        return 0;
+      });
+  }, [item?.platform_data]);
 
   // Check if content needs truncation
   const rawContentNeedsTruncation = useMemo(() => {
@@ -458,6 +622,39 @@ export function ContentModal({ item, onClose }: ContentModalProps) {
                 <div className="mb-6 sm:mb-8">
                   <h3 className="font-mono-ui text-xs uppercase tracking-widest text-[var(--foreground-muted)] mb-3">Summary</h3>
                   <p className="text-[var(--foreground)] leading-relaxed text-base sm:text-lg">{item.summary}</p>
+                </div>
+              )}
+
+              {/* X Article full content - shown prominently for articles */}
+              {item.platform_data?.isArticle && item.body_text && (
+                <div className="mb-6 sm:mb-8">
+                  <h3 className="font-mono-ui text-xs uppercase tracking-widest text-[var(--foreground-muted)] mb-3">Article Content</h3>
+                  <div className="prose prose-neutral max-w-none">
+                    <div className="text-[var(--foreground)] leading-relaxed whitespace-pre-wrap text-sm sm:text-base">
+                      <TextWithLinks text={item.body_text} />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Thread Text - Show full thread if available */}
+              {threadData && (
+                <div className="mb-6 sm:mb-8">
+                  <ThreadTextDisplay thread={threadData} />
+                </div>
+              )}
+
+              {/* Linked Content - Research papers, articles from thread */}
+              {linkedContent.length > 0 && (
+                <div className="mb-6 sm:mb-8">
+                  <h3 className="font-mono-ui text-xs uppercase tracking-widest text-[var(--foreground-muted)] mb-3">
+                    Research & Links ({linkedContent.length})
+                  </h3>
+                  <div className="space-y-3">
+                    {linkedContent.map((content, index) => (
+                      <LinkedContentCard key={index} content={content} />
+                    ))}
+                  </div>
                 </div>
               )}
 

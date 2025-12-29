@@ -7,6 +7,35 @@ const TWITTER_URL_PATTERNS = [
   /^https?:\/\/(www\.)?(twitter|x)\.com\/\w+$/i,
 ];
 
+// FxTwitter Article content block
+interface ArticleBlock {
+  key: string;
+  type: string; // 'header-one', 'header-two', 'unstyled', etc.
+  text: string;
+  data?: Record<string, unknown>;
+  entityRanges?: Array<{ offset: number; length: number; key: number }>;
+  inlineStyleRanges?: Array<{ offset: number; length: number; style: string }>;
+}
+
+// FxTwitter Article structure
+interface FxTwitterArticle {
+  id: string;
+  title: string;
+  preview_text?: string;
+  created_at?: string;
+  modified_at?: string;
+  cover_media?: {
+    media_info?: {
+      original_img_url?: string;
+      original_img_width?: number;
+      original_img_height?: number;
+    };
+  };
+  content?: {
+    blocks?: ArticleBlock[];
+  };
+}
+
 // FxTwitter API response interface
 interface FxTwitterResponse {
   code: number;
@@ -38,6 +67,7 @@ interface FxTwitterResponse {
     lang?: string;
     replying_to?: string;
     replying_to_status?: string;
+    article?: FxTwitterArticle;
     media?: {
       photos?: Array<{
         url: string;
@@ -258,6 +288,31 @@ export class TwitterScraper implements ContentScraper {
   }
 
   /**
+   * Extract plain text from article content blocks
+   */
+  private extractArticleText(article: FxTwitterArticle): string {
+    if (!article.content?.blocks) {
+      return article.preview_text || '';
+    }
+
+    const textParts: string[] = [];
+
+    for (const block of article.content.blocks) {
+      if (!block.text) continue;
+
+      // Add appropriate formatting based on block type
+      if (block.type === 'header-one' || block.type === 'header-two') {
+        // Add headers with emphasis
+        textParts.push(`\n## ${block.text}\n`);
+      } else {
+        textParts.push(block.text);
+      }
+    }
+
+    return textParts.join('\n\n').trim();
+  }
+
+  /**
    * Fetch tweet from FxTwitter API (free, no auth required)
    */
   private async fetchFromFxTwitter(username: string, tweetId: string): Promise<ExtractedContent | null> {
@@ -279,8 +334,38 @@ export class TwitterScraper implements ContentScraper {
 
     const tweet = data.tweet;
 
+    // Check if this is an X Article
+    const isArticle = !!tweet.article;
+    const article = tweet.article;
+
+    // For articles, extract the full article text; otherwise use tweet text
+    let title: string;
+    let description: string;
+    let bodyText: string;
+
+    if (isArticle && article) {
+      title = article.title || tweet.text.slice(0, 100);
+      const articleText = this.extractArticleText(article);
+      description = article.preview_text || articleText.slice(0, 500);
+      bodyText = articleText;
+    } else {
+      title = tweet.text.slice(0, 100) + (tweet.text.length > 100 ? '...' : '');
+      description = tweet.text;
+      bodyText = tweet.text;
+    }
+
     // Extract images
     const images: MediaItem[] = [];
+
+    // Add article cover image first if present
+    if (article?.cover_media?.media_info?.original_img_url) {
+      images.push({
+        url: article.cover_media.media_info.original_img_url,
+        width: article.cover_media.media_info.original_img_width,
+        height: article.cover_media.media_info.original_img_height,
+      });
+    }
+
     if (tweet.media?.photos) {
       for (const photo of tweet.media.photos) {
         images.push({ url: photo.url });
@@ -319,9 +404,9 @@ export class TwitterScraper implements ContentScraper {
     };
 
     return {
-      title: tweet.text.slice(0, 100) + (tweet.text.length > 100 ? '...' : ''),
-      description: tweet.text,
-      bodyText: tweet.text,
+      title,
+      description,
+      bodyText,
       authorName: tweet.author.name,
       authorHandle: `@${tweet.author.screen_name}`,
       publishedAt,
@@ -337,6 +422,8 @@ export class TwitterScraper implements ContentScraper {
         profileImageUrl: tweet.author.avatar_url,
         replyingTo: tweet.replying_to,
         replyingToStatus: tweet.replying_to_status,
+        isArticle,
+        articleId: article?.id,
       },
       threadContext,
     };
