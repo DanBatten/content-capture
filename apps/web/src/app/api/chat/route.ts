@@ -20,18 +20,22 @@ function getSupabase() {
 
 function getAnthropic() {
   if (!anthropic) {
-    anthropic = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY!,
-    });
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      throw new Error('ANTHROPIC_API_KEY environment variable is not set');
+    }
+    anthropic = new Anthropic({ apiKey });
   }
   return anthropic;
 }
 
 function getOpenAI() {
   if (!openai) {
-    openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY!,
-    });
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      throw new Error('OPENAI_API_KEY environment variable is not set');
+    }
+    openai = new OpenAI({ apiKey });
   }
   return openai;
 }
@@ -221,6 +225,11 @@ My question: ${message}`;
     });
   } catch (error) {
     console.error('Chat API error:', error);
-    return NextResponse.json({ error: 'Chat failed' }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Chat failed';
+    const isConfigError = message.includes('environment variable');
+    return NextResponse.json(
+      { error: isConfigError ? 'Chat service is not configured' : 'Chat failed' },
+      { status: isConfigError ? 503 : 500 }
+    );
   }
 }
