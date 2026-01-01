@@ -7,7 +7,7 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   sources?: Source[];
-  mode?: 'standard' | 'deep_research';
+  mode?: 'standard' | 'deep_research' | 'item_context';
   sourcesAnalyzed?: number;
 }
 
@@ -135,13 +135,26 @@ const MarkdownComponents = {
   ),
 };
 
-export function ChatInterface() {
+interface ChatInterfaceProps {
+  topicFilter?: string;
+  initialPrompt?: string;
+}
+
+export function ChatInterface({ topicFilter, initialPrompt }: ChatInterfaceProps = {}) {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState(initialPrompt || '');
   const [isLoading, setIsLoading] = useState(false);
   const [deepResearch, setDeepResearch] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Update input when initialPrompt changes
+  useEffect(() => {
+    if (initialPrompt) {
+      setInput(initialPrompt);
+      inputRef.current?.focus();
+    }
+  }, [initialPrompt]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -176,6 +189,7 @@ export function ChatInterface() {
         body: JSON.stringify({
           message: currentInput,
           deepResearch: currentDeepResearch,
+          topicFilter,
           conversationHistory: messages.slice(-10).map((m) => ({
             role: m.role,
             content: m.content,
@@ -232,19 +246,26 @@ export function ChatInterface() {
         {messages.length === 0 && (
           <div className="text-center py-12">
             <h3 className="font-serif text-xl text-[var(--foreground)] mb-2">
-              Ask your knowledge base
+              {topicFilter ? `Explore ${topicFilter}` : 'Ask your knowledge base'}
             </h3>
             <p className="text-[var(--foreground-muted)] font-mono-ui text-sm max-w-md mx-auto">
-              I can search through your saved content and answer questions based on what you&apos;ve
-              archived. Try asking about topics, finding specific articles, or exploring themes
-              across your saved content.
+              {topicFilter
+                ? `Ask questions about your saved ${topicFilter} content. I'll search through and synthesize insights from what you've archived.`
+                : `I can search through your saved content and answer questions based on what you've archived. Try asking about topics, finding specific articles, or exploring themes across your saved content.`}
             </p>
             <div className="mt-6 flex flex-wrap justify-center gap-2">
-              {[
-                'What are the key insights from my AI research?',
-                'Synthesize learnings from my saved design articles',
-                'What action items can I extract from my archive?',
-              ].map((suggestion) => (
+              {(topicFilter
+                ? [
+                    `What are the key insights about ${topicFilter}?`,
+                    `Summarize my ${topicFilter} content`,
+                    `What patterns do you see in my ${topicFilter} saves?`,
+                  ]
+                : [
+                    'What are the key insights from my AI research?',
+                    'Synthesize learnings from my saved design articles',
+                    'What action items can I extract from my archive?',
+                  ]
+              ).map((suggestion) => (
                 <button
                   key={suggestion}
                   onClick={() => setInput(suggestion)}
@@ -320,8 +341,10 @@ export function ChatInterface() {
             onKeyDown={handleKeyDown}
             placeholder={
               deepResearch
-                ? 'Ask for deep analysis, synthesis, or action items...'
-                : 'Ask about your saved content...'
+                ? `Ask for deep analysis${topicFilter ? ` about ${topicFilter}` : ''}...`
+                : topicFilter
+                  ? `Ask about ${topicFilter}...`
+                  : 'Ask about your saved content...'
             }
             rows={1}
             className={`flex-1 bg-transparent border rounded-lg px-4 py-3 font-mono-ui text-sm text-[var(--foreground)] placeholder-[var(--foreground-muted)] outline-none transition-colors resize-none ${

@@ -85,18 +85,38 @@ interface Source {
   summary: string | null;
 }
 
+const ITEM_CONTEXT_PROMPT = `You are helping the user explore a specific piece of content from their knowledge base.
+
+The PRIMARY CONTENT being discussed is provided first, followed by related content from their archive.
+
+Focus your responses on:
+1. **Explaining and elaborating** on the primary content - answer questions about it directly
+2. **Making connections** to related items in the knowledge base
+3. **Providing deeper analysis** - extract insights, implications, and applications
+4. **Building context** - help the user understand how this fits into broader themes
+
+Be specific and reference the content directly. The user saved this content intentionally - help them get maximum value from it.`;
+
 /**
  * Chat API with RAG (Retrieval Augmented Generation)
  * POST /api/chat
  * Body: {
  *   message: string,
  *   conversationHistory?: Message[],
- *   deepResearch?: boolean  // Enable deep research mode for comprehensive analysis
+ *   deepResearch?: boolean,  // Enable deep research mode for comprehensive analysis
+ *   itemId?: string,         // Focus chat on a specific item
+ *   topicFilter?: string     // Scope search to a specific topic
  * }
  */
 export async function POST(request: NextRequest) {
   try {
-    const { message, conversationHistory = [], deepResearch = false } = await request.json();
+    const {
+      message,
+      conversationHistory = [],
+      deepResearch = false,
+      itemId,
+      topicFilter,
+    } = await request.json();
 
     if (!message || typeof message !== 'string') {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 });
@@ -106,7 +126,12 @@ export async function POST(request: NextRequest) {
     const retrievalCount = deepResearch ? 20 : 10; // More context for deep research
     const matchThreshold = deepResearch ? 0.25 : 0.3; // Lower threshold to catch more relevant content
     const maxTokens = deepResearch ? 4096 : 2048; // Longer responses for comprehensive analysis
-    const systemPrompt = deepResearch ? DEEP_RESEARCH_PROMPT : RAG_SYSTEM_PROMPT;
+
+    // Select system prompt based on context
+    let systemPrompt = deepResearch ? DEEP_RESEARCH_PROMPT : RAG_SYSTEM_PROMPT;
+    if (itemId) {
+      systemPrompt = ITEM_CONTEXT_PROMPT;
+    }
 
     // 1. Generate embedding for the user's question
     const embeddingResponse = await getOpenAI().embeddings.create({
@@ -118,51 +143,132 @@ export async function POST(request: NextRequest) {
     const queryEmbedding = embeddingResponse.data[0].embedding;
 
     // 2. Retrieve relevant context from the knowledge base
-    const { data: results, error: searchError } = await getSupabase().rpc(
-      'search_content_semantic',
-      {
-        query_embedding: `[${queryEmbedding.join(',')}]`,
-        match_threshold: matchThreshold,
-        match_count: retrievalCount,
-      }
-    );
+    let results: Record<string, unknown>[] = [];
+    let primaryItem: Record<string, unknown> | null = null;
 
-    if (searchError) {
-      console.error('Semantic search error:', searchError);
+    // If itemId is provided, fetch that item first and find similar items
+    if (itemId) {
+      // Fetch the primary item
+      const { data: item, error: itemError } = await getSupabase()
+        .from('content_items')
+        .select('*')
+        .eq('id', itemId)
+        .single();
+
+      if (itemError) {
+        console.error('Error fetching item:', itemError);
+      } else {
+        primaryItem = item;
+
+        // Get similar items using the database function
+        const { data: similarItems, error: similarError } = await getSupabase().rpc(
+          'get_similar_content',
+          {
+            content_id: itemId,
+            match_count: retrievalCount - 1,
+          }
+        );
+
+        if (similarError) {
+          console.error('Error getting similar items:', similarError);
+        }
+
+        // Filter by topic if specified
+        let filteredSimilar = similarItems || [];
+        if (topicFilter) {
+          filteredSimilar = filteredSimilar.filter(
+            (item: Record<string, unknown>) =>
+              Array.isArray(item.topics) && item.topics.includes(topicFilter)
+          );
+        }
+
+        results = filteredSimilar;
+      }
+    } else {
+      // Standard semantic search
+      const { data: searchResults, error: searchError } = await getSupabase().rpc(
+        'search_content_semantic',
+        {
+          query_embedding: `[${queryEmbedding.join(',')}]`,
+          match_threshold: matchThreshold,
+          match_count: retrievalCount,
+        }
+      );
+
+      if (searchError) {
+        console.error('Semantic search error:', searchError);
+      }
+
+      // Filter by topic if specified
+      results = searchResults || [];
+      if (topicFilter) {
+        results = results.filter(
+          (item: Record<string, unknown>) =>
+            Array.isArray(item.topics) && item.topics.includes(topicFilter)
+        );
+      }
     }
 
     // 3. Format context for Claude - include more content in deep research mode
     const contentLimit = deepResearch ? 2000 : 800; // More content per item for deep research
 
-    const context =
-      results && results.length > 0
-        ? results
-            .map(
-              (item: Record<string, unknown>, i: number) => {
-                const bodyText = typeof item.body_text === 'string' ? item.body_text : '';
-                const summary = item.summary as string || '';
-                const description = item.description as string || '';
+    // Helper function to format a single item
+    const formatItem = (item: Record<string, unknown>, index: number, isPrimary = false) => {
+      const bodyText = typeof item.body_text === 'string' ? item.body_text : '';
+      const summary = item.summary as string || '';
+      const description = item.description as string || '';
 
-                // For deep research, include more of the actual content
-                const contentPreview = deepResearch
-                  ? bodyText.slice(0, contentLimit) || summary || description
-                  : summary || description || bodyText.slice(0, contentLimit);
+      // For primary item or deep research, include more content
+      const limit = isPrimary ? 3000 : contentLimit;
+      const contentPreview = (isPrimary || deepResearch)
+        ? bodyText.slice(0, limit) || summary || description
+        : summary || description || bodyText.slice(0, limit);
 
-                return `[${i + 1}] "${item.title || 'Untitled'}" by ${item.author_name || item.author_handle || 'Unknown'}
+      const prefix = isPrimary ? '⭐ PRIMARY CONTENT' : `[${index}]`;
+
+      return `${prefix} "${item.title || 'Untitled'}" by ${item.author_name || item.author_handle || 'Unknown'}
 Source: ${item.source_url}
 Topics: ${Array.isArray(item.topics) ? item.topics.join(', ') : 'N/A'}
 
-${contentPreview}${contentPreview.length >= contentLimit ? '...' : ''}`;
-              }
-            )
-            .join('\n\n---\n\n')
-        : 'No relevant content found in the knowledge base.';
+${contentPreview}${contentPreview.length >= limit ? '...' : ''}`;
+    };
+
+    // Build context with primary item first if specified
+    let context = '';
+    if (primaryItem) {
+      context = formatItem(primaryItem, 0, true);
+      if (results.length > 0) {
+        context += '\n\n---\n\n## Related Content\n\n';
+        context += results
+          .map((item, i) => formatItem(item, i + 1))
+          .join('\n\n---\n\n');
+      }
+    } else if (results.length > 0) {
+      context = results
+        .map((item, i) => formatItem(item, i + 1))
+        .join('\n\n---\n\n');
+    } else {
+      context = 'No relevant content found in the knowledge base.';
+    }
 
     // 4. Build messages for Claude
-    const userPrompt = deepResearch
-      ? `I want you to conduct deep research on the following question using my knowledge base.
+    const totalItems = (primaryItem ? 1 : 0) + results.length;
+    const topicContext = topicFilter ? ` (filtered to topic: ${topicFilter})` : '';
 
-Here is the relevant content from my archive (${results?.length || 0} items):
+    let userPrompt: string;
+    if (itemId && primaryItem) {
+      // Item-focused chat
+      userPrompt = `I want to explore this specific piece of content from my knowledge base:
+
+${context}
+
+---
+
+My question about this content: ${message}`;
+    } else if (deepResearch) {
+      userPrompt = `I want you to conduct deep research on the following question using my knowledge base${topicContext}.
+
+Here is the relevant content from my archive (${totalItems} items):
 
 ${context}
 
@@ -174,14 +280,16 @@ Please provide a comprehensive analysis with:
 - Key insights and learnings
 - Actionable takeaways
 - Patterns and themes across sources
-- Any gaps or areas for further exploration`
-      : `Here is relevant context from my knowledge base (${results?.length || 0} items):
+- Any gaps or areas for further exploration`;
+    } else {
+      userPrompt = `Here is relevant context from my knowledge base${topicContext} (${totalItems} items):
 
 ${context}
 
 ---
 
 My question: ${message}`;
+    }
 
     const messages: Anthropic.MessageParam[] = [
       // Include conversation history (limited for deep research to save context)
@@ -208,8 +316,9 @@ My question: ${message}`;
     const answer = textBlock?.type === 'text' ? textBlock.text : '';
 
     // 6. Format sources for the response
+    const allItems = primaryItem ? [primaryItem, ...results] : results;
     const sources: Source[] =
-      results?.map((r: Record<string, unknown>) => ({
+      allItems?.map((r: Record<string, unknown>) => ({
         id: r.id as string,
         title: r.title as string | null,
         url: r.source_url as string,
@@ -220,8 +329,10 @@ My question: ${message}`;
     return NextResponse.json({
       answer,
       sources,
-      mode: deepResearch ? 'deep_research' : 'standard',
-      sourcesAnalyzed: results?.length || 0,
+      mode: itemId ? 'item_context' : deepResearch ? 'deep_research' : 'standard',
+      sourcesAnalyzed: totalItems,
+      ...(itemId && { focusedItemId: itemId }),
+      ...(topicFilter && { topicFilter }),
     });
   } catch (error) {
     console.error('Chat API error:', error);

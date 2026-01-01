@@ -202,6 +202,7 @@ export class TwitterScraper implements ContentScraper {
     }
 
     // Try VxTwitter API as backup
+    let isArticleDetected = false;
     try {
       console.log(`Trying VxTwitter API for tweet ${tweetId}`);
       const result = await this.fetchFromVxTwitter(username, tweetId);
@@ -209,10 +210,30 @@ export class TwitterScraper implements ContentScraper {
         console.log('SUCCESS: VxTwitter API returned valid tweet data');
         return result;
       }
+      // VxTwitter returned null - might be an X Article
+      isArticleDetected = true;
     } catch (err) {
       const errMsg = `VxTwitter failed: ${err instanceof Error ? err.message : String(err)}`;
       console.warn(errMsg);
       errors.push(errMsg);
+    }
+
+    // If VxTwitter detected an X Article, retry FxTwitter with a delay
+    // (FxTwitter handles articles, might have had temporary failure)
+    if (isArticleDetected) {
+      try {
+        console.log('Retrying FxTwitter for X Article...');
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+        const result = await this.fetchFromFxTwitter(username, tweetId);
+        if (result) {
+          console.log('SUCCESS: FxTwitter retry returned article data');
+          return result;
+        }
+      } catch (err) {
+        const errMsg = `FxTwitter retry failed: ${err instanceof Error ? err.message : String(err)}`;
+        console.warn(errMsg);
+        errors.push(errMsg);
+      }
     }
 
     // Fallback to Apify if available
@@ -454,6 +475,13 @@ export class TwitterScraper implements ContentScraper {
 
     if (!data.tweetID) {
       throw new Error('Tweet not found');
+    }
+
+    // VxTwitter doesn't return article content - only a boolean flag and URL
+    // Return null to let FxTwitter handle it (or retry FxTwitter for article content)
+    if (data.article === true) {
+      console.log('VxTwitter detected X Article but cannot extract content - returning null');
+      return null;
     }
 
     // Extract images

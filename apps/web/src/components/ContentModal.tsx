@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useRef } from 'react';
 import type { ContentItem } from '@/types/content';
+import { ItemChat } from './ItemChat';
 
 const RAW_CONTENT_CHAR_LIMIT = 300;
 
@@ -449,6 +450,7 @@ function MobileGallery({ media }: { media: Array<{ type: 'video' | 'image'; url:
 
 export function ContentModal({ item, onClose }: ContentModalProps) {
   const [isRawContentExpanded, setIsRawContentExpanded] = useState(false);
+  const [activeTab, setActiveTab] = useState<'content' | 'chat'>('content');
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -462,6 +464,7 @@ export function ContentModal({ item, onClose }: ContentModalProps) {
     if (item) {
       document.body.style.overflow = 'hidden';
       setIsRawContentExpanded(false); // Reset when item changes
+      setActiveTab('content'); // Reset tab when item changes
     } else {
       document.body.style.overflow = '';
     }
@@ -593,15 +596,51 @@ export function ContentModal({ item, onClose }: ContentModalProps) {
                 </div>
               )}
             </div>
-            <button
-              onClick={onClose}
-              className="font-mono-ui text-sm text-[var(--foreground-muted)] hover:text-[var(--foreground)] transition-colors"
-            >
-              [ close ]
-            </button>
+            <div className="flex items-center gap-4">
+              {/* Tab buttons */}
+              <div className="flex items-center gap-1 bg-[var(--card-bg)] rounded-lg p-1">
+                <button
+                  onClick={() => setActiveTab('content')}
+                  className={`px-3 py-1.5 rounded font-mono-ui text-xs transition-colors ${
+                    activeTab === 'content'
+                      ? 'bg-[var(--foreground)] text-[var(--background)]'
+                      : 'text-[var(--foreground-muted)] hover:text-[var(--foreground)]'
+                  }`}
+                >
+                  Content
+                </button>
+                <button
+                  onClick={() => setActiveTab('chat')}
+                  className={`px-3 py-1.5 rounded font-mono-ui text-xs transition-colors ${
+                    activeTab === 'chat'
+                      ? 'bg-[var(--accent)] text-white'
+                      : 'text-[var(--foreground-muted)] hover:text-[var(--foreground)]'
+                  }`}
+                >
+                  Chat about this
+                </button>
+              </div>
+              <button
+                onClick={onClose}
+                className="font-mono-ui text-sm text-[var(--foreground-muted)] hover:text-[var(--foreground)] transition-colors"
+              >
+                [ close ]
+              </button>
+            </div>
           </div>
 
-          {/* Content area - stacked on mobile, side-by-side on desktop */}
+          {/* Content/Chat area */}
+          {activeTab === 'chat' ? (
+            /* Chat tab view */
+            <div className="flex-1 overflow-hidden p-4 sm:p-6 lg:p-8">
+              <ItemChat
+                itemId={item.id}
+                itemTitle={item.title || 'Untitled'}
+                itemTopics={item.topics || []}
+              />
+            </div>
+          ) : (
+          /* Content area - stacked on mobile, side-by-side on desktop */
           <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
             {/* Mobile horizontal gallery - shown on mobile/tablet only */}
             {hasMedia && (
@@ -879,6 +918,7 @@ export function ContentModal({ item, onClose }: ContentModalProps) {
               </div>
             )}
           </div>
+          )}
         </div>
       </div>
     </div>
