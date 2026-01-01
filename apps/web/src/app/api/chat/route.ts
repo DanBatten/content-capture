@@ -226,11 +226,37 @@ export async function POST(request: NextRequest) {
 
       const prefix = isPrimary ? '⭐ PRIMARY CONTENT' : `[${index}]`;
 
-      return `${prefix} "${item.title || 'Untitled'}" by ${item.author_name || item.author_handle || 'Unknown'}
+      let formattedContent = `${prefix} "${item.title || 'Untitled'}" by ${item.author_name || item.author_handle || 'Unknown'}
 Source: ${item.source_url}
 Topics: ${Array.isArray(item.topics) ? item.topics.join(', ') : 'N/A'}
 
 ${contentPreview}${contentPreview.length >= limit ? '...' : ''}`;
+
+      // Include linked content (PDFs, articles) from platform_data if available
+      const platformData = item.platform_data as Record<string, unknown> | null;
+      if (platformData?.linked_content && Array.isArray(platformData.linked_content)) {
+        const linkedContent = platformData.linked_content as Array<{
+          url?: string;
+          title?: string;
+          description?: string;
+          bodyText?: string;
+          contentType?: string;
+        }>;
+
+        if (linkedContent.length > 0) {
+          formattedContent += '\n\n📎 LINKED DOCUMENTS:';
+          for (const link of linkedContent) {
+            if (!link.bodyText && !link.description) continue;
+
+            const linkLimit = isPrimary ? 2000 : 500; // More content for primary item
+            const linkContent = link.bodyText?.slice(0, linkLimit) || link.description || '';
+
+            formattedContent += `\n\n--- ${link.title || link.url || 'Linked Document'} (${link.contentType || 'unknown'}) ---\n${linkContent}${linkContent.length >= linkLimit ? '...' : ''}`;
+          }
+        }
+      }
+
+      return formattedContent;
     };
 
     // Build context with primary item first if specified

@@ -353,6 +353,25 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+/**
+ * Sanitize text to remove problematic Unicode characters that break JSON/PostgreSQL
+ * Removes control characters, null bytes, and invalid escape sequences
+ */
+function sanitizeText(text: string): string {
+  return text
+    // Remove null bytes
+    .replace(/\0/g, '')
+    // Remove other control characters (except newline, tab, carriage return)
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+    // Remove Unicode replacement character and other problematic chars
+    .replace(/[\uFFFD\uFFFE\uFFFF]/g, '')
+    // Remove private use area characters
+    .replace(/[\uE000-\uF8FF]/g, '')
+    // Normalize whitespace
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 // ============ Database Types ============
 
 interface TwitterItem {
@@ -414,18 +433,18 @@ function prepareTextForEmbedding(
 
     parts.push(`\n--- Linked: ${link.url} ---`);
     if (link.title) {
-      parts.push(`Link Title: ${link.title}`);
+      parts.push(`Link Title: ${sanitizeText(link.title)}`);
     }
     if (link.description) {
-      parts.push(`Link Description: ${link.description}`);
+      parts.push(`Link Description: ${sanitizeText(link.description)}`);
     }
     if (link.bodyText) {
-      // Limit each link's body text
-      parts.push(`Link Content: ${link.bodyText.slice(0, 3000)}`);
+      // Limit each link's body text and sanitize
+      parts.push(`Link Content: ${sanitizeText(link.bodyText.slice(0, 3000))}`);
     }
   }
 
-  return parts.join('\n\n');
+  return sanitizeText(parts.join('\n\n'));
 }
 
 async function generateEmbedding(text: string): Promise<number[] | null> {
@@ -455,14 +474,14 @@ async function updateItemWithLinkedContent(
   // Generate new embedding with enriched content
   const embedding = await generateEmbedding(embeddingText);
 
-  // Update platform_data with linked content
+  // Update platform_data with linked content (sanitize text to avoid Unicode issues)
   const updatedPlatformData = {
     ...existingPlatformData,
     linked_content: linkedContent.map(lc => ({
       url: lc.url,
-      title: lc.title,
-      description: lc.description,
-      bodyText: lc.bodyText?.slice(0, 5000), // Store truncated version
+      title: lc.title ? sanitizeText(lc.title) : null,
+      description: lc.description ? sanitizeText(lc.description) : null,
+      bodyText: lc.bodyText ? sanitizeText(lc.bodyText.slice(0, 5000)) : null, // Store truncated and sanitized version
       contentType: lc.contentType,
       scrapedAt: lc.scrapedAt,
       error: lc.error,
