@@ -209,13 +209,9 @@ Synthesize insights from these sources. Be specific and cite sources when releva
  * GET endpoint for simple queries (useful for testing)
  */
 export async function GET(request: NextRequest) {
-  // Validate API key
-  if (!validateApiKey(request)) {
-    return NextResponse.json(
-      { error: 'Unauthorized - invalid or missing API key' },
-      { status: 401 }
-    );
-  }
+  // Require authentication for external API calls
+  const authError = requireAuth(request);
+  if (authError) return authError;
 
   const { searchParams } = new URL(request.url);
   const query = searchParams.get('q');
