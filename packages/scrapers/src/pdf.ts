@@ -103,6 +103,7 @@ export class PdfScraper implements ContentScraper {
       videos: [],
       platformData: {
         contentFormat: 'pdf',
+        pdfUrl: url, // Store PDF URL for future multimodal processing
         pageCount: pdf.numpages,
         pdfInfo: {
           title: pdf.info?.Title,
