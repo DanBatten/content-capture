@@ -4,6 +4,19 @@ import type { ExtractedContent } from '@content-capture/core';
 import type { ContentScraper, ScraperOptions } from './types';
 
 /**
+ * Sanitize text to remove problematic Unicode characters that break JSON/PostgreSQL
+ */
+function sanitizeText(text: string): string {
+  return text
+    .replace(/\0/g, '') // Remove null bytes
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // Remove control characters
+    .replace(/[\uFFFD\uFFFE\uFFFF]/g, '') // Remove Unicode replacement chars
+    .replace(/[\uE000-\uF8FF]/g, '') // Remove private use area
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
  * PDF content scraper
  * Extracts text and metadata from PDF documents
  * Also handles arXiv abstract pages by fetching the actual PDF
@@ -71,8 +84,8 @@ export class PdfScraper implements ContentScraper {
     const title = pdf.info?.Title || this.extractTitleFromUrl(url);
     const author = pdf.info?.Author;
 
-    // Store full PDF content - no truncation
-    const bodyText = pdf.text.replace(/\s+/g, ' ').trim();
+    // Store full PDF content - no truncation, sanitized
+    const bodyText = sanitizeText(pdf.text);
 
     // Create a summary from the first part of the text
     const description = bodyText.slice(0, 500) + (bodyText.length > 500 ? '...' : '');
@@ -200,12 +213,12 @@ export class PdfScraper implements ContentScraper {
     const finalTitle = title || pdf.info?.Title || this.extractTitleFromUrl(url);
     const finalAuthor = authorName || pdf.info?.Author;
 
-    // Full text - no truncation
-    const fullText = pdf.text.replace(/\s+/g, ' ').trim();
+    // Full text - no truncation, sanitized
+    const fullText = sanitizeText(pdf.text);
 
     // Structure content with abstract first if available
     const bodyText = description
-      ? `ABSTRACT:\n${description}\n\nFULL PAPER:\n${fullText}`
+      ? `ABSTRACT:\n${sanitizeText(description)}\n\nFULL PAPER:\n${fullText}`
       : fullText;
 
     console.log(`PDF Scraper: Extracted arXiv paper - ${pdf.numpages} pages, ${bodyText.length} chars`);
