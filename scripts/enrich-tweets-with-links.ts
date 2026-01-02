@@ -185,12 +185,11 @@ async function scrapeArticle(url: string): Promise<ScrapedContent> {
       bodyText = $('body').text();
     }
 
-    // Clean up text
+    // Clean up text - no truncation, store full content
     result.bodyText = bodyText
       .replace(/\s+/g, ' ')
       .replace(/\n\s*\n/g, '\n\n')
-      .trim()
-      .slice(0, 15000); // Limit to ~15k chars
+      .trim();
 
     if (result.title) {
       result.title = result.title.trim();
@@ -235,11 +234,11 @@ async function scrapePdf(url: string): Promise<ScrapedContent> {
     const data = await pdfParse(buffer);
 
     result.title = data.info?.Title || url.split('/').pop()?.replace('.pdf', '') || null;
+    // No truncation - store full PDF content
     result.bodyText = data.text
       .replace(/\s+/g, ' ')
       .replace(/\n\s*\n/g, '\n\n')
-      .trim()
-      .slice(0, 20000); // PDFs can have more content
+      .trim();
 
   } catch (err) {
     result.error = err instanceof Error ? err.message : 'Unknown error';
@@ -316,7 +315,7 @@ async function scrapeArxiv(url: string): Promise<ScrapedContent> {
     const buffer = Buffer.from(await pdfResponse.arrayBuffer());
     const data = await pdfParse(buffer);
 
-    // Combine abstract with full text
+    // Combine abstract with full text - no truncation, store everything
     const fullText = data.text
       .replace(/\s+/g, ' ')
       .replace(/\n\s*\n/g, '\n\n')
@@ -324,8 +323,8 @@ async function scrapeArxiv(url: string): Promise<ScrapedContent> {
 
     // Structure the content with abstract first, then full paper
     result.bodyText = result.description
-      ? `ABSTRACT:\n${result.description}\n\nFULL PAPER:\n${fullText.slice(0, 25000)}`
-      : fullText.slice(0, 25000);
+      ? `ABSTRACT:\n${result.description}\n\nFULL PAPER:\n${fullText}`
+      : fullText;
 
     console.log(`      [ArXiv] Extracted ${fullText.length} chars from PDF`);
 
@@ -475,13 +474,14 @@ async function updateItemWithLinkedContent(
   const embedding = await generateEmbedding(embeddingText);
 
   // Update platform_data with linked content (sanitize text to avoid Unicode issues)
+  // Store full content - no truncation. Storage is cheap, data is valuable.
   const updatedPlatformData = {
     ...existingPlatformData,
     linked_content: linkedContent.map(lc => ({
       url: lc.url,
       title: lc.title ? sanitizeText(lc.title) : null,
       description: lc.description ? sanitizeText(lc.description) : null,
-      bodyText: lc.bodyText ? sanitizeText(lc.bodyText.slice(0, 5000)) : null, // Store truncated and sanitized version
+      bodyText: lc.bodyText ? sanitizeText(lc.bodyText) : null,
       contentType: lc.contentType,
       scrapedAt: lc.scrapedAt,
       error: lc.error,

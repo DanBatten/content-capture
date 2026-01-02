@@ -248,10 +248,13 @@ ${contentPreview}${contentPreview.length >= limit ? '...' : ''}`;
           for (const link of linkedContent) {
             if (!link.bodyText && !link.description) continue;
 
-            const linkLimit = isPrimary ? 2000 : 500; // More content for primary item
-            const linkContent = link.bodyText?.slice(0, linkLimit) || link.description || '';
+            // Primary item gets FULL linked content (papers, articles, etc.)
+            // Related items get a generous but limited amount to manage total context
+            const linkContent = isPrimary
+              ? (link.bodyText || link.description || '')
+              : (link.bodyText?.slice(0, 8000) || link.description || '');
 
-            formattedContent += `\n\n--- ${link.title || link.url || 'Linked Document'} (${link.contentType || 'unknown'}) ---\n${linkContent}${linkContent.length >= linkLimit ? '...' : ''}`;
+            formattedContent += `\n\n--- ${link.title || link.url || 'Linked Document'} (${link.contentType || 'unknown'}) ---\n${linkContent}`;
           }
         }
       }

@@ -48,8 +48,8 @@ export class PdfScraper implements ContentScraper {
     const title = pdf.info?.Title || this.extractTitleFromUrl(url);
     const author = pdf.info?.Author;
 
-    // Limit text to prevent token overflow (keep first ~50k chars)
-    const bodyText = pdf.text.replace(/\s+/g, ' ').trim().slice(0, 50000);
+    // Store full PDF content - no truncation
+    const bodyText = pdf.text.replace(/\s+/g, ' ').trim();
 
     // Create a summary from the first part of the text
     const description = bodyText.slice(0, 500) + (bodyText.length > 500 ? '...' : '');
