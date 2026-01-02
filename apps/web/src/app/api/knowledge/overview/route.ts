@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import Anthropic from '@anthropic-ai/sdk';
+import { requireAuth } from '@/lib/api-auth';
 
 let supabase: SupabaseClient | null = null;
 let anthropic: Anthropic | null = null;
@@ -47,6 +48,10 @@ Format your response as JSON:
  * Body: { topic: string, forceRefresh?: boolean }
  */
 export async function POST(request: NextRequest) {
+  // Require authentication for external API calls
+  const authError = requireAuth(request);
+  if (authError) return authError;
+
   try {
     const { topic, forceRefresh = false } = await request.json();
 

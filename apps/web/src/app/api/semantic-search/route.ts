@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
+import { requireAuth } from '@/lib/api-auth';
 
 // Lazy-initialized clients to avoid build-time errors
 let supabase: SupabaseClient | null = null;
@@ -31,6 +32,10 @@ function getOpenAI() {
  * Body: { query: string, limit?: number, threshold?: number }
  */
 export async function POST(request: NextRequest) {
+  // Require authentication for external API calls
+  const authError = requireAuth(request);
+  if (authError) return authError;
+
   try {
     const { query, limit = 10, threshold = 0.3 } = await request.json();
 

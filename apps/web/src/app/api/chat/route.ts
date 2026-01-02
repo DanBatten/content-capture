@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
+import { requireAuth } from '@/lib/api-auth';
 
 // Lazy-initialized clients to avoid build-time errors
 let supabase: SupabaseClient | null = null;
@@ -109,6 +110,10 @@ Be specific and reference the content directly. The user saved this content inte
  * }
  */
 export async function POST(request: NextRequest) {
+  // Require authentication for external API calls
+  const authError = requireAuth(request);
+  if (authError) return authError;
+
   try {
     const {
       message,

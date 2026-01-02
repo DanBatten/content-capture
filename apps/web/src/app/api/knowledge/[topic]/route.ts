@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { requireAuth } from '@/lib/api-auth';
 
 let supabase: SupabaseClient | null = null;
 
@@ -22,6 +23,10 @@ interface TopicParams {
  * Returns details and items for a specific topic
  */
 export async function GET(request: NextRequest, { params }: TopicParams) {
+  // Require authentication for external API calls
+  const authError = requireAuth(request);
+  if (authError) return authError;
+
   try {
     const { topic } = await params;
     const decodedTopic = decodeURIComponent(topic);

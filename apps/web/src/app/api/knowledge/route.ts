@@ -1,5 +1,6 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { requireAuth } from '@/lib/api-auth';
 
 let supabase: SupabaseClient | null = null;
 
@@ -24,7 +25,11 @@ interface TopicStat {
  * GET /api/knowledge
  * Returns topic statistics for the Knowledge page
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+  // Require authentication for external API calls
+  const authError = requireAuth(request);
+  if (authError) return authError;
+
   try {
     // Try to use the database function first
     const { data: stats, error: statsError } = await getSupabase().rpc('get_topic_stats');

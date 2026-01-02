@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
+import { requireAuth } from '@/lib/api-auth';
 
 // Lazy-initialized clients to avoid build-time errors
 let supabase: SupabaseClient | null = null;
@@ -36,21 +37,6 @@ function getOpenAI() {
   return openai;
 }
 
-/**
- * Validate API key for external access
- */
-function validateApiKey(request: NextRequest): boolean {
-  const authHeader = request.headers.get('authorization');
-  const apiKey = authHeader?.replace('Bearer ', '');
-  const expectedKey = process.env.EXTERNAL_API_KEY;
-
-  if (!expectedKey) {
-    console.warn('EXTERNAL_API_KEY not configured - external API disabled');
-    return false;
-  }
-
-  return apiKey === expectedKey;
-}
 
 interface QueryRequest {
   query: string;
@@ -75,13 +61,9 @@ const DEEP_RESEARCH_SYSTEM = `You are conducting deep research across a personal
 Be thorough but focused. Structure your response clearly.`;
 
 export async function POST(request: NextRequest) {
-  // Validate API key
-  if (!validateApiKey(request)) {
-    return NextResponse.json(
-      { error: 'Unauthorized - invalid or missing API key' },
-      { status: 401 }
-    );
-  }
+  // Require authentication for external API calls
+  const authError = requireAuth(request);
+  if (authError) return authError;
 
   try {
     const body: QueryRequest = await request.json();

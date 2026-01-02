@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { requireAuth } from '@/lib/api-auth';
 
 let supabase: SupabaseClient | null = null;
 
@@ -17,7 +18,11 @@ function getSupabase() {
  * GET /api/knowledge/preferences
  * Returns user preferences for pinned topics
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+  // Require authentication for external API calls
+  const authError = requireAuth(request);
+  if (authError) return authError;
+
   try {
     const { data, error } = await getSupabase()
       .from('user_preferences')
@@ -49,6 +54,10 @@ export async function GET() {
  * Body: { pinnedTopics?: string[], customKnowledgeBases?: KnowledgeBase[] }
  */
 export async function POST(request: NextRequest) {
+  // Require authentication for external API calls
+  const authError = requireAuth(request);
+  if (authError) return authError;
+
   try {
     const body = await request.json();
     const { pinnedTopics, customKnowledgeBases } = body;
