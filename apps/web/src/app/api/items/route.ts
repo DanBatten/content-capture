@@ -13,8 +13,12 @@ const GCS_BUCKET = 'web-scrapbook-content-capture-media';
  * Transform a note row to ContentItem format for UI compatibility
  */
 function transformNoteToContentItem(note: any) {
-  const backgroundUrl = note.background_image
-    ? `https://storage.googleapis.com/${GCS_BUCKET}/${note.background_image}`
+  // Normalize background image path (fix lowercase 'photo' to 'Photo')
+  const bgImage = note.background_image
+    ? note.background_image.replace(/note-backgrounds\/photo-/i, 'note-backgrounds/Photo-')
+    : null;
+  const backgroundUrl = bgImage
+    ? `https://storage.googleapis.com/${GCS_BUCKET}/${bgImage}`
     : `https://storage.googleapis.com/${GCS_BUCKET}/note-backgrounds/Photo-01.jpg`;
 
   return {

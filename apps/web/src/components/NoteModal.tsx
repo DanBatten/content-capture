@@ -35,7 +35,9 @@ function getBackgroundUrl(backgroundImage: string | null): string {
   if (!backgroundImage) {
     return `https://storage.googleapis.com/${GCS_BUCKET}/note-backgrounds/Photo-01.jpg`;
   }
-  return `https://storage.googleapis.com/${GCS_BUCKET}/${backgroundImage}`;
+  // Normalize path (fix lowercase 'photo' to 'Photo')
+  const normalized = backgroundImage.replace(/note-backgrounds\/photo-/i, 'note-backgrounds/Photo-');
+  return `https://storage.googleapis.com/${GCS_BUCKET}/${normalized}`;
 }
 
 export function NoteModal({ note, onClose }: NoteModalProps) {
