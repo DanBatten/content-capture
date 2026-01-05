@@ -29,7 +29,7 @@ function getTagColor(tag: string): typeof topicColors[0] {
   return topicColors[Math.abs(hash) % topicColors.length];
 }
 
-const GCS_BUCKET = 'content-capture-media';
+const GCS_BUCKET = 'web-scrapbook-content-capture-media';
 
 function getBackgroundUrl(backgroundImage: string | null): string {
   if (!backgroundImage) {

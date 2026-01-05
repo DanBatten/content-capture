@@ -99,39 +99,101 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Build query for content_items
-    let query = supabase
+    // If filtering by a specific source type (not notes), fetch only from content_items
+    if (sourceType) {
+      let query = supabase
+        .from('content_items')
+        .select('*', { count: 'exact' })
+        .eq('status', status)
+        .eq('source_type', sourceType)
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1);
+
+      if (topic) {
+        query = query.contains('topics', [topic]);
+      }
+
+      if (search) {
+        query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%,body_text.ilike.%${search}%`);
+      }
+
+      const { data, error, count } = await query;
+
+      if (error) {
+        console.error('Database error:', error);
+        return NextResponse.json({ error: 'Failed to fetch items' }, { status: 500 });
+      }
+
+      return NextResponse.json({
+        items: data || [],
+        total: count || 0,
+        page,
+        limit,
+        totalPages: Math.ceil((count || 0) / limit),
+      });
+    }
+
+    // No source type filter - fetch from both tables and merge chronologically
+    // First, get counts from both tables
+    let contentQuery = supabase
       .from('content_items')
       .select('*', { count: 'exact' })
       .eq('status', status)
-      .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1);
+      .order('created_at', { ascending: false });
 
-    if (sourceType) {
-      query = query.eq('source_type', sourceType);
-    }
+    let notesQuery = supabase
+      .from('notes')
+      .select('*', { count: 'exact' })
+      .eq('status', status)
+      .order('created_at', { ascending: false });
 
     if (topic) {
-      query = query.contains('topics', [topic]);
+      contentQuery = contentQuery.contains('topics', [topic]);
+      notesQuery = notesQuery.contains('topics', [topic]);
     }
 
     if (search) {
-      query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%,body_text.ilike.%${search}%`);
+      contentQuery = contentQuery.or(`title.ilike.%${search}%,description.ilike.%${search}%,body_text.ilike.%${search}%`);
+      notesQuery = notesQuery.or(`title.ilike.%${search}%,cleaned_text.ilike.%${search}%,raw_text.ilike.%${search}%`);
     }
 
-    const { data, error, count } = await query;
+    // Fetch both in parallel
+    const [contentResult, notesResult] = await Promise.all([
+      contentQuery,
+      notesQuery,
+    ]);
 
-    if (error) {
-      console.error('Database error:', error);
-      return NextResponse.json({ error: 'Failed to fetch items' }, { status: 500 });
+    if (contentResult.error) {
+      console.error('Content items database error:', contentResult.error);
+      return NextResponse.json({ error: 'Failed to fetch content items' }, { status: 500 });
     }
+
+    if (notesResult.error) {
+      console.error('Notes database error:', notesResult.error);
+      return NextResponse.json({ error: 'Failed to fetch notes' }, { status: 500 });
+    }
+
+    // Transform notes to ContentItem format
+    const transformedNotes = (notesResult.data || []).map(transformNoteToContentItem);
+    const contentItems = contentResult.data || [];
+
+    // Merge and sort by created_at descending
+    const allItems = [...contentItems, ...transformedNotes].sort((a, b) => {
+      const dateA = new Date(a.created_at).getTime();
+      const dateB = new Date(b.created_at).getTime();
+      return dateB - dateA;
+    });
+
+    // Apply pagination to merged results
+    const paginatedItems = allItems.slice(offset, offset + limit);
+    const totalCount = (contentResult.count || 0) + (notesResult.count || 0);
 
     return NextResponse.json({
-      items: data || [],
-      total: count || 0,
+      items: paginatedItems,
+      total: totalCount,
       page,
       limit,
-      totalPages: Math.ceil((count || 0) / limit),
+      totalPages: Math.ceil(totalCount / limit),
     });
   } catch (error) {
     console.error('Items API error:', error);

@@ -10,7 +10,7 @@ interface NoteCardProps {
 }
 
 // GCS bucket for note backgrounds
-const GCS_BUCKET = 'content-capture-media';
+const GCS_BUCKET = 'web-scrapbook-content-capture-media';
 
 function getBackgroundUrl(backgroundImage: string | null): string {
   if (!backgroundImage) {
