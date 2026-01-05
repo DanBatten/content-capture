@@ -1,7 +1,7 @@
 export interface ContentItem {
   id: string;
   source_url: string;
-  source_type: 'twitter' | 'instagram' | 'linkedin' | 'pinterest' | 'web';
+  source_type: 'twitter' | 'instagram' | 'linkedin' | 'pinterest' | 'web' | 'note';
   title: string | null;
   description: string | null;
   body_text: string | null;

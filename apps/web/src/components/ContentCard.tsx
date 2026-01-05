@@ -16,6 +16,7 @@ const sourceColors: Record<string, string> = {
   linkedin: 'bg-[#0A66C2]',
   pinterest: 'bg-[#E60023]',
   web: 'bg-[var(--accent)]',
+  note: 'bg-amber-500',
 };
 
 // Soft, muted topic colors
@@ -137,6 +138,18 @@ export function ContentCard({ item, size = 'medium', position = 'auto', onClick,
                 )}
               </div>
             )}
+
+            {/* Note title overlay */}
+            {item.source_type === 'note' && (item.platform_data?.shortTitle || item.title) && (
+              <div className="absolute inset-0 flex items-center justify-center p-4 bg-gradient-to-t from-black/60 via-black/30 to-black/40">
+                <span className={`
+                  text-yellow-300 font-bold text-center leading-tight drop-shadow-lg
+                  ${size === 'large' ? 'text-2xl' : 'text-lg'}
+                `}>
+                  {(item.platform_data?.shortTitle as string) || item.title}
+                </span>
+              </div>
+            )}
           </>
         ) : (
           <div className={`absolute inset-0 ${sourceColors[item.source_type] || 'bg-[var(--accent)]'}`}>
@@ -154,7 +167,8 @@ export function ContentCard({ item, size = 'medium', position = 'auto', onClick,
             {item.source_type === 'twitter' ? '𝕏' :
              item.source_type === 'instagram' ? 'IG' :
              item.source_type === 'linkedin' ? 'in' :
-             item.source_type === 'pinterest' ? 'P' : '◎'}
+             item.source_type === 'pinterest' ? 'P' :
+             item.source_type === 'note' ? '✎' : '◎'}
           </span>
         </div>
 

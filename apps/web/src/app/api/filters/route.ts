@@ -8,14 +8,20 @@ const supabase = createClient(
 
 export async function GET() {
   try {
-    // Get all completed items to extract filter options
-    const { data: items, error } = await supabase
+    // Get all completed content items
+    const { data: items, error: itemsError } = await supabase
       .from('content_items')
       .select('source_type, topics, disciplines')
       .eq('status', 'complete');
 
-    if (error) {
-      console.error('Database error:', error);
+    // Get all completed notes
+    const { data: notes, error: notesError } = await supabase
+      .from('notes')
+      .select('topics, disciplines')
+      .eq('status', 'complete');
+
+    if (itemsError) {
+      console.error('Database error:', itemsError);
       return NextResponse.json({ error: 'Failed to fetch filters' }, { status: 500 });
     }
 
@@ -24,6 +30,7 @@ export async function GET() {
     const topicCounts: Record<string, number> = {};
     const disciplineCounts: Record<string, number> = {};
 
+    // Process content items
     for (const item of items || []) {
       // Source types
       if (item.source_type) {
@@ -45,6 +52,28 @@ export async function GET() {
       }
     }
 
+    // Process notes - add as "note" source type
+    const notesCount = notes?.length || 0;
+    if (notesCount > 0) {
+      sourceTypeCounts['note'] = notesCount;
+
+      for (const note of notes || []) {
+        // Topics from notes
+        if (note.topics && Array.isArray(note.topics)) {
+          for (const topic of note.topics) {
+            topicCounts[topic] = (topicCounts[topic] || 0) + 1;
+          }
+        }
+
+        // Disciplines from notes
+        if (note.disciplines && Array.isArray(note.disciplines)) {
+          for (const discipline of note.disciplines) {
+            disciplineCounts[discipline] = (disciplineCounts[discipline] || 0) + 1;
+          }
+        }
+      }
+    }
+
     // Sort by count and convert to arrays
     const sortByCount = (counts: Record<string, number>) =>
       Object.entries(counts)
@@ -55,7 +84,7 @@ export async function GET() {
       sourceTypes: sortByCount(sourceTypeCounts),
       topics: sortByCount(topicCounts),
       disciplines: sortByCount(disciplineCounts),
-      totalItems: items?.length || 0,
+      totalItems: (items?.length || 0) + notesCount,
     });
   } catch (error) {
     console.error('Filters API error:', error);
