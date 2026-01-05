@@ -15,7 +15,7 @@ const GCS_BUCKET = 'web-scrapbook-content-capture-media';
 function getBackgroundUrl(backgroundImage: string | null): string {
   if (!backgroundImage) {
     // Fallback to first background
-    return `https://storage.googleapis.com/${GCS_BUCKET}/note-backgrounds/photo-01.jpg`;
+    return `https://storage.googleapis.com/${GCS_BUCKET}/note-backgrounds/Photo-01.jpg`;
   }
   return `https://storage.googleapis.com/${GCS_BUCKET}/${backgroundImage}`;
 }

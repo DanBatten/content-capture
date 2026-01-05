@@ -243,7 +243,7 @@ export function generateContentHash(text: string): string {
 function selectBackgroundImage(noteId: string): string {
   const hash = createHash('sha256').update(noteId).digest();
   const index = hash.readUInt32BE(0) % BACKGROUND_IMAGE_COUNT;
-  return `note-backgrounds/photo-${String(index + 1).padStart(2, '0')}.jpg`;
+  return `note-backgrounds/Photo-${String(index + 1).padStart(2, '0')}.jpg`;
 }
 
 /**

@@ -15,7 +15,7 @@ const GCS_BUCKET = 'web-scrapbook-content-capture-media';
 function transformNoteToContentItem(note: any) {
   const backgroundUrl = note.background_image
     ? `https://storage.googleapis.com/${GCS_BUCKET}/${note.background_image}`
-    : `https://storage.googleapis.com/${GCS_BUCKET}/note-backgrounds/photo-01.jpg`;
+    : `https://storage.googleapis.com/${GCS_BUCKET}/note-backgrounds/Photo-01.jpg`;
 
   return {
     id: note.id,
