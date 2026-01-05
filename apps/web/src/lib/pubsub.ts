@@ -1,5 +1,5 @@
 import { PubSub } from '@google-cloud/pubsub';
-import type { CaptureMessage } from '@content-capture/core';
+import type { CaptureMessage, NoteMessage } from '@content-capture/core';
 
 // Lazy initialization to avoid build-time errors
 let _pubsub: PubSub | null = null;
@@ -55,6 +55,33 @@ export async function sendToQueue(message: CaptureMessage): Promise<boolean> {
     return true;
   } catch (error) {
     console.error('Error sending message to Pub/Sub:', error);
+    return false;
+  }
+}
+
+/**
+ * Send a note message to the processing queue
+ */
+export async function sendNoteToQueue(message: NoteMessage): Promise<boolean> {
+  try {
+    const pubsub = getPubSubClient();
+    const topic = pubsub.topic(getTopicName());
+
+    const messageBuffer = Buffer.from(JSON.stringify(message));
+
+    await topic.publishMessage({
+      data: messageBuffer,
+      attributes: {
+        messageType: 'note',
+        noteId: message.noteId,
+        userId: message.userId,
+        traceId: message.traceId,
+      },
+    });
+
+    return true;
+  } catch (error) {
+    console.error('Error sending note message to Pub/Sub:', error);
     return false;
   }
 }

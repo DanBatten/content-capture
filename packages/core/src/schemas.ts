@@ -19,6 +19,16 @@ export const analysisResultSchema = z.object({
   contentType: contentTypeSchema,
 });
 
+// Notes schemas
+export const noteStatusSchema = z.enum(['pending', 'processing', 'complete', 'failed']);
+
+export const noteRequestSchema = z.object({
+  text: z.string()
+    .min(1, 'Note text is required')
+    .max(50000, 'Note text exceeds maximum length'),
+  idempotencyKey: z.string().uuid().optional(),
+});
+
 /**
  * Detect the source platform from a URL
  */

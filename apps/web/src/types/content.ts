@@ -54,3 +54,30 @@ export interface ItemsResponse {
   limit: number;
   totalPages: number;
 }
+
+// Note type for UI (camelCase matching API response)
+export interface Note {
+  id: string;
+  userId: string;
+  rawText: string;
+  cleanedText: string | null;
+  expandedText: string | null;
+  title: string | null;
+  shortTitle: string | null;
+  contentHash: string | null;
+  backgroundImage: string | null;
+  thumbnailUrl: string | null;
+  summary: string | null;
+  topics: string[];
+  disciplines: string[];
+  useCases: string[];
+  llmWarnings: string[] | null;
+  llmModel: string | null;
+  llmPromptVersion: string | null;
+  status: 'pending' | 'processing' | 'complete' | 'failed';
+  errorMessage: string | null;
+  processingAttempts: number;
+  createdAt: string;
+  updatedAt: string;
+  processedAt: string | null;
+}

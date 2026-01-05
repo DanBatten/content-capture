@@ -5,6 +5,7 @@ import { Storage } from '@google-cloud/storage';
 import { PubSub } from '@google-cloud/pubsub';
 import type {
   CaptureMessage,
+  NoteMessage,
   ExtractedContent,
   AnalysisResult,
   SourceType,
@@ -20,7 +21,7 @@ import {
   type ThreadData,
   type ScrapedLinkContent,
 } from '@content-capture/scrapers';
-import { createAnalyzer, createEmbeddingsGenerator } from '@content-capture/analyzer';
+import { createAnalyzer, createEmbeddingsGenerator, createNoteAnalyzer } from '@content-capture/analyzer';
 
 // Initialize clients
 const supabase = createClient(
@@ -51,6 +52,9 @@ if (process.env.OPENAI_API_KEY) {
   console.warn('OPENAI_API_KEY not set - embeddings disabled');
 }
 
+// Initialize note analyzer
+const noteAnalyzer = createNoteAnalyzer();
+
 interface PubSubData {
   // Gen2 Eventarc format - data is at root level with snake_case keys
   data?: string;
@@ -65,8 +69,142 @@ interface PubSubData {
 }
 
 /**
+ * Handle note processing
+ * Process flow: claim → analyze → categorize → embed → save
+ */
+async function handleNoteProcessing(
+  message: NoteMessage,
+  startTime: number
+): Promise<void> {
+  const { noteId, userId, traceId } = message;
+  console.log(`[${traceId}] Processing note ${noteId} for user ${userId}`);
+
+  try {
+    // Step 1: Claim the note atomically (prevents duplicate processing)
+    console.log(`[${traceId}] Step 1: Claiming note...`);
+    const { data: claimed, error: claimError } = await supabase.rpc(
+      'claim_note_for_processing',
+      { p_note_id: noteId, p_user_id: userId }
+    );
+
+    if (claimError) {
+      console.error(`[${traceId}] Claim RPC error:`, claimError);
+      throw new Error(`Failed to claim note: ${claimError.message}`);
+    }
+
+    if (!claimed) {
+      console.log(`[${traceId}] Note already claimed or processed, skipping`);
+      return;
+    }
+
+    // Step 2: Read the note from database
+    console.log(`[${traceId}] Step 2: Reading note...`);
+    const { data: note, error: readError } = await supabase
+      .from('notes')
+      .select('raw_text, background_image')
+      .eq('id', noteId)
+      .single();
+
+    if (readError || !note) {
+      throw new Error(`Failed to read note: ${readError?.message || 'Not found'}`);
+    }
+
+    // Step 3: Process with NoteAnalyzer (clean text, extract titles)
+    console.log(`[${traceId}] Step 3: Analyzing note with LLM...`);
+    const noteResult = await noteAnalyzer.processNote(note.raw_text);
+    console.log(`[${traceId}] Generated title: "${noteResult.mainTitle}"`);
+    if (noteResult.warnings.length > 0) {
+      console.log(`[${traceId}] Warnings: ${noteResult.warnings.join(', ')}`);
+    }
+
+    // Step 4: Run categorization for topics/summary using ContentAnalyzer
+    console.log(`[${traceId}] Step 4: Categorizing...`);
+    const analysis = await analyzer.analyze(
+      {
+        title: noteResult.mainTitle,
+        description: noteResult.cleanedText.slice(0, 500),
+        bodyText: noteResult.cleanedText,
+        images: [],
+        videos: [],
+      },
+      'web', // Treat as generic content for categorization
+      `note://${noteId}`
+    );
+    console.log(`[${traceId}] Topics: ${analysis.topics.join(', ')}`);
+
+    // Step 5: Generate embedding
+    let embedding: number[] | undefined;
+    if (embeddingsGenerator) {
+      console.log(`[${traceId}] Step 5: Generating embedding...`);
+      try {
+        embedding = await embeddingsGenerator.generateContentEmbedding({
+          title: noteResult.mainTitle,
+          bodyText: noteResult.cleanedText,
+          summary: analysis.summary,
+          topics: analysis.topics,
+        });
+        console.log(`[${traceId}] Generated embedding with ${embedding.length} dimensions`);
+      } catch (err) {
+        console.warn(`[${traceId}] Failed to generate embedding:`, err);
+      }
+    }
+
+    // Step 6: Update the note in database
+    console.log(`[${traceId}] Step 6: Saving to database...`);
+    const { error: updateError } = await supabase
+      .from('notes')
+      .update({
+        cleaned_text: noteResult.cleanedText,
+        expanded_text: noteResult.expandedText || null,
+        title: noteResult.mainTitle,
+        short_title: noteResult.shortTitle,
+        summary: analysis.summary,
+        topics: analysis.topics,
+        disciplines: [analysis.discipline],
+        use_cases: analysis.useCases,
+        llm_warnings: noteResult.warnings.length > 0 ? noteResult.warnings : null,
+        llm_model: noteResult.llmMeta.model,
+        llm_prompt_version: noteResult.llmMeta.promptVersion,
+        ...(embedding
+          ? {
+              embedding: `[${embedding.join(',')}]`,
+              embedding_generated_at: new Date().toISOString(),
+            }
+          : {}),
+        status: 'complete',
+        processed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', noteId);
+
+    if (updateError) {
+      throw new Error(`Database update failed: ${updateError.message}`);
+    }
+
+    const duration = Date.now() - startTime;
+    console.log(`[${traceId}] Note ${noteId} completed in ${duration}ms`);
+  } catch (error) {
+    console.error(`[${traceId}] Error processing note ${noteId}:`, error);
+
+    // Update status to failed
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    await supabase
+      .from('notes')
+      .update({
+        status: 'failed',
+        error_message: errorMessage,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', noteId);
+
+    // Re-throw to trigger Pub/Sub retry
+    throw error;
+  }
+}
+
+/**
  * Cloud Function triggered by Pub/Sub
- * Processes captured URLs: scrape → analyze → store
+ * Routes to either capture processing or note processing based on message type
  */
 export async function processCapture(
   cloudEvent: CloudEvent<PubSubData>
@@ -85,16 +223,19 @@ export async function processCapture(
   // Cast to any to access the property directly
   const rawData = eventData as any;
   let messageData: string | undefined;
+  let attributes: Record<string, string> | undefined;
 
   if (typeof rawData === 'string') {
     // Data is directly a string (unlikely but handle it)
     messageData = rawData;
   } else if (rawData && typeof rawData.data === 'string') {
-    // Gen2 format: { data: "base64...", message_id: ... }
+    // Gen2 format: { data: "base64...", message_id: ..., attributes: {...} }
     messageData = rawData.data;
+    attributes = rawData.attributes;
   } else if (rawData?.message?.data) {
-    // Gen1 format: { message: { data: "base64..." } }
+    // Gen1 format: { message: { data: "base64...", attributes: {...} } }
     messageData = rawData.message.data;
+    attributes = rawData.message.attributes;
   }
 
   if (!messageData) {
@@ -103,7 +244,18 @@ export async function processCapture(
   }
 
   console.log('Decoding message, length:', messageData.length);
+  console.log('Message attributes:', attributes);
 
+  // Check if this is a note message
+  if (attributes?.messageType === 'note') {
+    const noteMessage: NoteMessage = JSON.parse(
+      Buffer.from(messageData, 'base64').toString('utf-8')
+    );
+    await handleNoteProcessing(noteMessage, startTime);
+    return;
+  }
+
+  // Otherwise, process as capture message
   const message: CaptureMessage = JSON.parse(
     Buffer.from(messageData, 'base64').toString('utf-8')
   );

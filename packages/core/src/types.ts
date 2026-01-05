@@ -115,3 +115,100 @@ export interface CaptureMessage {
   sourceType: SourceType;
   notes?: string;
 }
+
+// =============================================================================
+// Notes Types
+// =============================================================================
+
+export type NoteStatus = 'pending' | 'processing' | 'complete' | 'failed';
+
+/**
+ * Request payload for creating a new note
+ */
+export interface NoteRequest {
+  text: string;
+  idempotencyKey?: string; // UUID from client for deduplication
+}
+
+/**
+ * Pub/Sub message for note processing
+ */
+export interface NoteMessage {
+  noteId: string;
+  userId: string;
+  traceId: string;
+}
+
+/**
+ * Note entity matching database schema
+ */
+export interface Note {
+  id: string;
+  userId: string;
+
+  // Content
+  rawText: string;
+  cleanedText?: string;
+  expandedText?: string;
+  title?: string;
+  shortTitle?: string;
+
+  // Idempotency
+  contentHash?: string;
+
+  // Thumbnail
+  backgroundImage?: string;
+  thumbnailUrl?: string;
+
+  // AI Analysis
+  summary?: string;
+  topics: string[];
+  disciplines: string[];
+  useCases: string[];
+
+  // LLM metadata
+  llmWarnings?: string[];
+  llmModel?: string;
+  llmPromptVersion?: string;
+
+  // Embedding
+  embedding?: number[];
+  embeddingGeneratedAt?: string;
+
+  // Metadata
+  platformData?: Record<string, unknown>;
+
+  // Status
+  status: NoteStatus;
+  errorMessage?: string;
+  processingAttempts: number;
+
+  // Timestamps
+  createdAt: string;
+  updatedAt: string;
+  processedAt?: string;
+}
+
+/**
+ * Result from NoteAnalyzer LLM processing
+ */
+export interface NoteAnalysisResult {
+  cleanedText: string;
+  expandedText?: string;
+  mainTitle: string;
+  shortTitle: string;
+  warnings: string[];
+  llmMeta: {
+    model: string;
+    promptVersion: string;
+  };
+}
+
+/**
+ * Response from creating a note
+ */
+export interface NoteResponse {
+  id: string;
+  status: NoteStatus;
+  existing?: boolean; // true if deduplicated to existing note
+}

@@ -8,6 +8,7 @@ import {
 
 export * from './prompts';
 export * from './embeddings';
+export * from './note-analyzer';
 
 export interface AnalyzerConfig {
   apiKey?: string;
