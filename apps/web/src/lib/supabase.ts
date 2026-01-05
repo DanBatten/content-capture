@@ -1,6 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import type { CaptureStatus, SourceType, NoteStatus } from '@content-capture/core';
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 
 // Lazy initialization to avoid build-time errors
 let _supabase: SupabaseClient | null = null;
@@ -277,15 +277,7 @@ export async function createNote(
   contentHash: string
 ): Promise<{ id: string; backgroundImage: string } | null> {
   // Generate a UUID first so we can deterministically select background
-  const { data: idData, error: idError } = await getSupabaseAdmin()
-    .rpc('gen_random_uuid');
-
-  if (idError) {
-    console.error('Error generating UUID:', idError);
-    return null;
-  }
-
-  const noteId = idData as string;
+  const noteId = randomUUID();
   const backgroundImage = selectBackgroundImage(noteId);
 
   const { data, error } = await getSupabaseAdmin()
