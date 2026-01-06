@@ -49,6 +49,7 @@ export function isSameOriginRequest(request: NextRequest): boolean {
   // Allow requests from the app itself
   const allowedOrigins = [
     'https://archivvve.com',
+    'https://www.archivvve.com',
     'http://localhost:3000',
     'http://localhost:3001',
   ];
