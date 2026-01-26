@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
 import type { ContentItem } from '@/types/content';
 import { ItemChat } from './ItemChat';
 
@@ -668,10 +669,8 @@ export function ContentModal({ item, onClose }: ContentModalProps) {
               {Boolean(item.platform_data?.isArticle) && item.body_text && (
                 <div className="mb-6 sm:mb-8">
                   <h3 className="font-mono-ui text-xs uppercase tracking-widest text-[var(--foreground-muted)] mb-3">Article Content</h3>
-                  <div className="prose prose-neutral max-w-none">
-                    <div className="text-[var(--foreground)] leading-relaxed whitespace-pre-wrap text-sm sm:text-base">
-                      <TextWithLinks text={item.body_text} />
-                    </div>
+                  <div className="prose prose-neutral max-w-none prose-headings:text-[var(--foreground)] prose-headings:font-semibold prose-h2:text-xl prose-h2:mt-6 prose-h2:mb-3 prose-p:text-[var(--foreground)] prose-p:leading-relaxed prose-p:mb-4 prose-li:text-[var(--foreground)] prose-strong:text-[var(--foreground)] text-sm sm:text-base">
+                    <ReactMarkdown>{item.body_text}</ReactMarkdown>
                   </div>
                 </div>
               )}
