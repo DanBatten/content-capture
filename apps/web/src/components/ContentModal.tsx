@@ -451,7 +451,6 @@ function MobileGallery({ media }: { media: Array<{ type: 'video' | 'image'; url:
 
 export function ContentModal({ item, onClose }: ContentModalProps) {
   const [isRawContentExpanded, setIsRawContentExpanded] = useState(false);
-  const [activeTab, setActiveTab] = useState<'content' | 'chat'>('content');
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -465,7 +464,6 @@ export function ContentModal({ item, onClose }: ContentModalProps) {
     if (item) {
       document.body.style.overflow = 'hidden';
       setIsRawContentExpanded(false); // Reset when item changes
-      setActiveTab('content'); // Reset tab when item changes
     } else {
       document.body.style.overflow = '';
     }
@@ -597,61 +595,53 @@ export function ContentModal({ item, onClose }: ContentModalProps) {
                 </div>
               )}
             </div>
-            <div className="flex items-center gap-4">
-              {/* Tab buttons */}
-              <div className="flex items-center gap-1 bg-[var(--card-bg)] rounded-lg p-1">
-                <button
-                  onClick={() => setActiveTab('content')}
-                  className={`px-3 py-1.5 rounded font-mono-ui text-xs transition-colors ${
-                    activeTab === 'content'
-                      ? 'bg-[var(--foreground)] text-[var(--background)]'
-                      : 'text-[var(--foreground-muted)] hover:text-[var(--foreground)]'
-                  }`}
-                >
-                  Content
-                </button>
-                <button
-                  onClick={() => setActiveTab('chat')}
-                  className={`px-3 py-1.5 rounded font-mono-ui text-xs transition-colors ${
-                    activeTab === 'chat'
-                      ? 'bg-[var(--accent)] text-white'
-                      : 'text-[var(--foreground-muted)] hover:text-[var(--foreground)]'
-                  }`}
-                >
-                  Chat about this
-                </button>
-              </div>
-              <button
-                onClick={onClose}
-                className="font-mono-ui text-sm text-[var(--foreground-muted)] hover:text-[var(--foreground)] transition-colors"
-              >
-                [ close ]
-              </button>
-            </div>
+            <button
+              onClick={onClose}
+              className="font-mono-ui text-sm text-[var(--foreground-muted)] hover:text-[var(--foreground)] transition-colors"
+            >
+              [ close ]
+            </button>
           </div>
 
-          {/* Content/Chat area */}
-          {activeTab === 'chat' ? (
-            /* Chat tab view */
-            <div className="flex-1 overflow-hidden p-4 sm:p-6 lg:p-8">
-              <ItemChat
-                itemId={item.id}
-                itemTitle={item.title || 'Untitled'}
-                itemTopics={item.topics || []}
-              />
-            </div>
-          ) : (
-          /* Content area - stacked on mobile, side-by-side on desktop */
+          {/* Content area - two column layout */}
           <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-            {/* Mobile horizontal gallery - shown on mobile/tablet only */}
-            {hasMedia && (
-              <div className="lg:hidden">
-                <MobileGallery media={allMedia} />
-              </div>
-            )}
+            {/* Left column: Media + Content */}
+            <div className="flex-1 flex flex-col overflow-hidden lg:w-1/2">
+              {/* Media gallery header */}
+              {hasMedia && (
+                <div className="flex-shrink-0 border-b border-[var(--panel-border)]">
+                  {/* Mobile horizontal gallery */}
+                  <div className="lg:hidden">
+                    <MobileGallery media={allMedia} />
+                  </div>
+                  {/* Desktop gallery */}
+                  <div className="hidden lg:block max-h-[40vh] overflow-y-auto">
+                    <div className="p-4 space-y-3">
+                      {allMedia.map((media, index) => (
+                        <div key={index} className="w-full">
+                          {media.type === 'video' ? (
+                            <video
+                              src={media.url}
+                              poster={media.thumbnail}
+                              controls
+                              className="w-full h-auto max-h-[35vh] object-contain"
+                            />
+                          ) : (
+                            <img
+                              src={media.url}
+                              alt={`Image ${index + 1}`}
+                              className="w-full h-auto max-h-[35vh] object-contain"
+                            />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
 
-            {/* Text content */}
-            <div className={`flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 ${hasMedia || isSocialWithoutMedia ? 'lg:w-2/5' : 'w-full'}`}>
+              {/* Text content */}
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
               {/* Title */}
               <h2 className="text-xl sm:text-2xl lg:text-3xl font-medium text-[var(--foreground)] mb-4 sm:mb-6 leading-tight">
                 {item.title || 'Untitled'}
@@ -866,58 +856,30 @@ export function ContentModal({ item, onClose }: ContentModalProps) {
                 </div>
               </div>
             </div>
+            </div>
 
-            {/* Desktop vertical gallery - shown on lg+ only */}
-            {hasMedia && (
-              <div className="hidden lg:flex lg:w-3/5 flex-col overflow-hidden border-l border-[var(--panel-border)]">
-                <div className="flex-1 overflow-y-auto p-6 lg:p-8 space-y-4">
-                  {allMedia.map((media, index) => (
-                    <div key={index} className="w-full">
-                      {media.type === 'video' ? (
-                        <video
-                          src={media.url}
-                          poster={media.thumbnail}
-                          controls
-                          className="w-full h-auto"
-                        />
-                      ) : (
-                        <img
-                          src={media.url}
-                          alt={`Image ${index + 1}`}
-                          className="w-full h-auto"
-                        />
-                      )}
-                    </div>
-                  ))}
-                </div>
+            {/* Right column: Chat interface */}
+            <div className="hidden lg:flex lg:w-1/2 flex-col overflow-hidden border-l border-[var(--panel-border)] bg-[var(--card-bg)]">
+              <div className="flex-1 overflow-hidden p-4">
+                <ItemChat
+                  itemId={item.id}
+                  itemTitle={item.title || 'Untitled'}
+                  itemTopics={item.topics || []}
+                />
               </div>
-            )}
+            </div>
 
-            {/* Embedded post for social posts without media */}
-            {isSocialWithoutMedia && hasEmbed && (
-              <div className="hidden lg:flex lg:w-3/5 flex-col overflow-hidden border-l border-[var(--panel-border)] bg-[var(--card-bg)]">
-                <div className="flex-1 overflow-y-auto p-6 lg:p-8 flex items-center justify-center">
-                  <div className="w-full max-w-lg">
-                    {tweetId && (
-                      <iframe
-                        src={`https://platform.twitter.com/embed/Tweet.html?id=${tweetId}&theme=light`}
-                        className="w-full min-h-[400px] border-0 rounded-xl bg-white"
-                        allowFullScreen
-                      />
-                    )}
-                    {instagramEmbedUrl && (
-                      <iframe
-                        src={instagramEmbedUrl}
-                        className="w-full min-h-[600px] border-0 rounded-xl bg-white"
-                        allowFullScreen
-                      />
-                    )}
-                  </div>
-                </div>
+            {/* Mobile chat - shown below content on mobile */}
+            <div className="lg:hidden border-t border-[var(--panel-border)] bg-[var(--card-bg)]">
+              <div className="p-4 h-[50vh]">
+                <ItemChat
+                  itemId={item.id}
+                  itemTitle={item.title || 'Untitled'}
+                  itemTopics={item.topics || []}
+                />
               </div>
-            )}
+            </div>
           </div>
-          )}
         </div>
       </div>
     </div>
