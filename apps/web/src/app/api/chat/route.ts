@@ -53,11 +53,16 @@ When responding:
 
 3. **Build on the knowledge** - Help the user develop their thinking. Connect ideas, identify gaps, suggest directions for further exploration.
 
-4. **Be specific and cite sources** - Reference specific content by title/author. Quote key passages when relevant.
+4. **Be specific and cite sources with hyperlinks** - Reference specific content by title/author AND include clickable links using markdown: [Title](URL). Each item includes its source URL.
 
 5. **Think like a research assistant** - If asked to analyze papers, actually analyze them. Extract methodologies, findings, implications. Don't just list what exists.
 
 6. **Identify patterns and contradictions** - When multiple sources touch on similar topics, note where they agree, disagree, or complement each other.
+
+IMPORTANT - Always hyperlink references:
+When you reference content from the knowledge base, use markdown links: [Title or Description](URL)
+- Example: "According to [Simon Willison's analysis](https://simonwillison.net/...)..."
+- Example: "This pattern appears in [Building AI Agents](https://example.com/...)..."
 
 The user has curated this knowledge base intentionally. Help them get maximum value from it - not just finding information, but understanding it deeply and putting it to use.`;
 
@@ -86,17 +91,29 @@ interface Source {
   summary: string | null;
 }
 
-const ITEM_CONTEXT_PROMPT = `You are helping the user explore a specific piece of content from their knowledge base.
+const ITEM_CONTEXT_PROMPT = `You are helping the user explore a specific piece of content from their knowledge base. You have access to their FULL knowledge base to make connections.
 
-The PRIMARY CONTENT being discussed is provided first, followed by related content from their archive.
+The PRIMARY CONTENT being discussed is provided first. Following that, you'll see:
+- Content similar to the primary item (related topics/themes)
+- Content relevant to the user's specific question (which may span different topics)
+
+This means you can answer questions like "how does this relate to X?" by actually searching their knowledge base for X.
 
 Focus your responses on:
 1. **Explaining and elaborating** on the primary content - answer questions about it directly
-2. **Making connections** to related items in the knowledge base
+2. **Making connections** to their broader knowledge base - you have real access to their other saved content
 3. **Providing deeper analysis** - extract insights, implications, and applications
-4. **Building context** - help the user understand how this fits into broader themes
+4. **Cross-referencing** - when the user asks how something relates to other topics, reference specific items from their archive
+5. **Building context** - help the user understand how this fits into broader themes in their knowledge base
 
-Be specific and reference the content directly. The user saved this content intentionally - help them get maximum value from it.`;
+IMPORTANT - Hyperlinking references:
+When you reference other content from the knowledge base, ALWAYS hyperlink it using markdown format: [Title or Author](URL)
+- Each content item includes its source URL - use it to create clickable links
+- Example: "This connects to [Simon Willison's post on LLM agents](https://simonwillison.net/...)"
+- Example: "As discussed in [Building Production AI Systems](https://example.com/...)"
+- This helps the user quickly navigate to related content
+
+Be specific and cite your sources with links. The user has curated this knowledge base - help them see how the pieces connect.`;
 
 /**
  * Chat API with RAG (Retrieval Augmented Generation)
@@ -151,7 +168,7 @@ export async function POST(request: NextRequest) {
     let results: Record<string, unknown>[] = [];
     let primaryItem: Record<string, unknown> | null = null;
 
-    // If itemId is provided, fetch that item first and find similar items
+    // If itemId is provided, fetch that item first and find both similar items AND semantically relevant items
     if (itemId) {
       // Fetch the primary item
       const { data: item, error: itemError } = await getSupabase()
@@ -165,12 +182,12 @@ export async function POST(request: NextRequest) {
       } else {
         primaryItem = item;
 
-        // Get similar items using the database function
+        // Get similar items based on the item's embedding
         const { data: similarItems, error: similarError } = await getSupabase().rpc(
           'get_similar_content',
           {
             content_id: itemId,
-            match_count: retrievalCount - 1,
+            match_count: Math.floor(retrievalCount / 2),
           }
         );
 
@@ -178,16 +195,58 @@ export async function POST(request: NextRequest) {
           console.error('Error getting similar items:', similarError);
         }
 
+        // ALSO search semantically based on the user's question
+        // This allows finding content related to what the user is asking about
+        const { data: questionResults, error: questionError } = await getSupabase().rpc(
+          'search_content_semantic',
+          {
+            query_embedding: `[${queryEmbedding.join(',')}]`,
+            match_threshold: matchThreshold,
+            match_count: Math.floor(retrievalCount / 2),
+          }
+        );
+
+        if (questionError) {
+          console.error('Semantic search error:', questionError);
+        }
+
+        // Log what we found for debugging
+        console.log(`[ItemChat] Primary item: ${primaryItem?.title}`);
+        console.log(`[ItemChat] Similar items found: ${similarItems?.length || 0}`);
+        console.log(`[ItemChat] Query-relevant items found: ${questionResults?.length || 0}`);
+
+        // Combine results, removing duplicates and the primary item itself
+        const seenIds = new Set<string>([itemId]);
+        const combinedResults: Record<string, unknown>[] = [];
+
+        // Add similar items first (most relevant to the primary content)
+        for (const item of (similarItems || [])) {
+          const id = item.id as string;
+          if (!seenIds.has(id)) {
+            seenIds.add(id);
+            combinedResults.push({ ...item, _source: 'similar' });
+          }
+        }
+
+        // Add question-relevant items (relevant to user's query)
+        for (const item of (questionResults || [])) {
+          const id = item.id as string;
+          if (!seenIds.has(id)) {
+            seenIds.add(id);
+            combinedResults.push({ ...item, _source: 'query' });
+          }
+        }
+
         // Filter by topic if specified
-        let filteredSimilar = similarItems || [];
+        let filteredResults = combinedResults;
         if (topicFilter) {
-          filteredSimilar = filteredSimilar.filter(
+          filteredResults = filteredResults.filter(
             (item: Record<string, unknown>) =>
               Array.isArray(item.topics) && item.topics.includes(topicFilter)
           );
         }
 
-        results = filteredSimilar;
+        results = filteredResults;
       }
     } else {
       // Standard semantic search
@@ -272,10 +331,23 @@ ${contentPreview}${contentPreview.length >= limit ? '...' : ''}`;
     if (primaryItem) {
       context = formatItem(primaryItem, 0, true);
       if (results.length > 0) {
-        context += '\n\n---\n\n## Related Content\n\n';
-        context += results
-          .map((item, i) => formatItem(item, i + 1))
-          .join('\n\n---\n\n');
+        // Separate similar items from query-relevant items
+        const similarItems = results.filter((item) => item._source === 'similar');
+        const queryItems = results.filter((item) => item._source === 'query');
+
+        if (similarItems.length > 0) {
+          context += '\n\n---\n\n## Similar Content (related to the primary item)\n\n';
+          context += similarItems
+            .map((item, i) => formatItem(item, i + 1))
+            .join('\n\n---\n\n');
+        }
+
+        if (queryItems.length > 0) {
+          context += '\n\n---\n\n## Content Relevant to Your Question\n\n';
+          context += queryItems
+            .map((item, i) => formatItem(item, similarItems.length + i + 1))
+            .join('\n\n---\n\n');
+        }
       }
     } else if (results.length > 0) {
       context = results
