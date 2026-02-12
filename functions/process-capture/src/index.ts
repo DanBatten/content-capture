@@ -260,8 +260,8 @@ export async function processCapture(
     Buffer.from(messageData, 'base64').toString('utf-8')
   );
 
-  const { captureId, url, sourceType, notes } = message;
-  console.log(`Processing capture ${captureId}: ${url} (${sourceType})`);
+  const { captureId, url, sourceType, notes, userId } = message;
+  console.log(`Processing capture ${captureId}: ${url} (${sourceType}) for user ${userId || 'unknown'}`);
 
   try {
     // Update status to processing
@@ -318,6 +318,19 @@ export async function processCapture(
         console.log(`Generated embedding with ${embedding.length} dimensions`);
       } catch (err) {
         console.warn('Failed to generate embedding:', err);
+      }
+    }
+
+    // Step 3.7: Verify user ownership if userId provided
+    if (userId) {
+      const { data: captureRecord } = await supabase
+        .from('content_items')
+        .select('user_id')
+        .eq('id', captureId)
+        .single();
+
+      if (captureRecord && captureRecord.user_id && captureRecord.user_id !== userId) {
+        throw new Error(`User ownership mismatch: message userId=${userId} but content_items.user_id=${captureRecord.user_id}`);
       }
     }
 

@@ -10,6 +10,7 @@ const RAW_CONTENT_CHAR_LIMIT = 300;
 interface ContentModalProps {
   item: ContentItem | null;
   onClose: () => void;
+  userTier?: 'free' | 'pro';
 }
 
 const sourceColors: Record<string, string> = {
@@ -376,8 +377,11 @@ function ThreadTextDisplay({ thread }: { thread: ThreadData }) {
   );
 }
 
-// Horizontal swipeable gallery for mobile
-function MobileGallery({ media }: { media: Array<{ type: 'video' | 'image'; url: string; thumbnail?: string }> }) {
+// Horizontal gallery component for both mobile and desktop
+function MediaGallery({ media, variant = 'mobile' }: {
+  media: Array<{ type: 'video' | 'image'; url: string; thumbnail?: string }>;
+  variant?: 'mobile' | 'desktop';
+}) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -390,66 +394,115 @@ function MobileGallery({ media }: { media: Array<{ type: 'video' | 'image'; url:
     }
   };
 
+  const scrollToIndex = (index: number) => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTo({
+        left: index * scrollRef.current.offsetWidth,
+        behavior: 'smooth'
+      });
+    }
+  };
+
+  const goNext = () => {
+    if (currentIndex < media.length - 1) {
+      scrollToIndex(currentIndex + 1);
+    }
+  };
+
+  const goPrev = () => {
+    if (currentIndex > 0) {
+      scrollToIndex(currentIndex - 1);
+    }
+  };
+
   if (media.length === 0) return null;
 
+  const isDesktop = variant === 'desktop';
+  const heightClass = isDesktop ? 'h-[280px]' : 'max-h-[40vh]';
+
   return (
-    <div className="w-full flex-shrink-0">
+    <div className="w-full flex-shrink-0 relative group">
       {/* Scrollable gallery */}
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide"
+        className={`flex overflow-x-auto snap-x snap-mandatory scrollbar-hide ${isDesktop ? 'h-[280px]' : ''}`}
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
       >
         {media.map((item, index) => (
           <div
             key={index}
-            className="w-full flex-shrink-0 snap-center"
+            className={`w-full flex-shrink-0 snap-center flex items-center justify-center ${isDesktop ? 'bg-[var(--panel-bg)]' : 'bg-black'}`}
           >
             {item.type === 'video' ? (
               <video
                 src={item.url}
                 poster={item.thumbnail}
                 controls
-                className="w-full h-auto max-h-[40vh] object-contain bg-black"
+                className={`w-auto max-w-full ${heightClass} object-contain`}
               />
             ) : (
               <img
                 src={item.url}
                 alt={`Image ${index + 1}`}
-                className="w-full h-auto max-h-[40vh] object-contain bg-black"
+                className={`w-auto max-w-full ${heightClass} object-contain`}
               />
             )}
           </div>
         ))}
       </div>
 
-      {/* Dot indicators */}
+      {/* Navigation arrows - desktop only, shown on hover */}
+      {isDesktop && media.length > 1 && (
+        <>
+          <button
+            onClick={goPrev}
+            disabled={currentIndex === 0}
+            className={`absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-[var(--foreground)]/80 text-[var(--background)] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-0 ${currentIndex === 0 ? 'cursor-default' : 'hover:bg-[var(--foreground)]'}`}
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <button
+            onClick={goNext}
+            disabled={currentIndex === media.length - 1}
+            className={`absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-[var(--foreground)]/80 text-[var(--background)] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-0 ${currentIndex === media.length - 1 ? 'cursor-default' : 'hover:bg-[var(--foreground)]'}`}
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        </>
+      )}
+
+      {/* Dot indicators / counter */}
       {media.length > 1 && (
-        <div className="flex justify-center gap-1.5 py-3 bg-[#E8DED0]">
-          {media.map((_, index) => (
-            <button
-              key={index}
-              onClick={() => {
-                scrollRef.current?.scrollTo({
-                  left: index * (scrollRef.current?.offsetWidth || 0),
-                  behavior: 'smooth'
-                });
-              }}
-              className={`w-2 h-2 rounded-full transition-all ${
-                index === currentIndex
-                  ? 'bg-[var(--foreground)] w-4'
-                  : 'bg-[var(--foreground)]/30'
-              }`}
-            />
-          ))}
+        <div className={`flex justify-center items-center gap-1.5 py-2 ${isDesktop ? 'bg-[var(--panel-bg)]' : 'bg-[#E8DED0]'}`}>
+          {isDesktop ? (
+            <span className="font-mono-ui text-xs text-[var(--foreground-muted)]">
+              {currentIndex + 1} / {media.length}
+            </span>
+          ) : (
+            media.map((_, index) => (
+              <button
+                key={index}
+                onClick={() => scrollToIndex(index)}
+                className={`w-2 h-2 rounded-full transition-all ${
+                  index === currentIndex
+                    ? 'bg-[var(--foreground)] w-4'
+                    : 'bg-[var(--foreground)]/30'
+                }`}
+              />
+            ))
+          )}
         </div>
       )}
     </div>
   );
 }
 
-export function ContentModal({ item, onClose }: ContentModalProps) {
+export function ContentModal({ item, onClose, userTier }: ContentModalProps) {
   const [isRawContentExpanded, setIsRawContentExpanded] = useState(false);
 
   useEffect(() => {
@@ -572,9 +625,9 @@ export function ContentModal({ item, onClose }: ContentModalProps) {
       />
 
       {/* Modal container - fullscreen on mobile/tablet, padded on desktop (lg+) */}
-      <div className="relative w-full h-full pt-0 lg:pt-[73px] px-0 lg:px-12 pb-0 lg:pb-12">
-        {/* Modal card */}
-        <div className="w-full h-full flex flex-col bg-[var(--panel-bg)] overflow-hidden">
+      <div className="relative w-full h-full pt-0 lg:pt-[73px] px-0 lg:px-8 xl:px-12 pb-0 lg:pb-8 xl:pb-12">
+        {/* Modal card - max width for very large screens */}
+        <div className="w-full h-full max-w-[1800px] mx-auto flex flex-col bg-[var(--panel-bg)] overflow-hidden lg:rounded-lg lg:shadow-2xl">
           {/* Full-width header */}
           <div className="flex items-center justify-between px-4 sm:px-6 lg:px-8 py-4 border-b border-[var(--panel-border)]">
             <div className="flex items-center gap-3">
@@ -606,42 +659,23 @@ export function ContentModal({ item, onClose }: ContentModalProps) {
           {/* Content area - two column layout */}
           <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
             {/* Left column: Media + Content */}
-            <div className="flex-1 flex flex-col overflow-hidden lg:w-1/2">
+            <div className="flex-1 flex flex-col overflow-hidden lg:w-[45%] lg:min-w-[400px] lg:max-w-[600px]">
               {/* Media gallery header */}
               {hasMedia && (
                 <div className="flex-shrink-0 border-b border-[var(--panel-border)]">
                   {/* Mobile horizontal gallery */}
                   <div className="lg:hidden">
-                    <MobileGallery media={allMedia} />
+                    <MediaGallery media={allMedia} variant="mobile" />
                   </div>
-                  {/* Desktop gallery */}
-                  <div className="hidden lg:block max-h-[40vh] overflow-y-auto">
-                    <div className="p-4 space-y-3">
-                      {allMedia.map((media, index) => (
-                        <div key={index} className="w-full">
-                          {media.type === 'video' ? (
-                            <video
-                              src={media.url}
-                              poster={media.thumbnail}
-                              controls
-                              className="w-full h-auto max-h-[35vh] object-contain"
-                            />
-                          ) : (
-                            <img
-                              src={media.url}
-                              alt={`Image ${index + 1}`}
-                              className="w-full h-auto max-h-[35vh] object-contain"
-                            />
-                          )}
-                        </div>
-                      ))}
-                    </div>
+                  {/* Desktop horizontal gallery with pagination */}
+                  <div className="hidden lg:block">
+                    <MediaGallery media={allMedia} variant="desktop" />
                   </div>
                 </div>
               )}
 
               {/* Text content */}
-              <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+              <div className="flex-1 overflow-y-auto p-5 sm:p-6 lg:p-8">
               {/* Title */}
               <h2 className="text-xl sm:text-2xl lg:text-3xl font-medium text-[var(--foreground)] mb-4 sm:mb-6 leading-tight">
                 {item.title || 'Untitled'}
@@ -688,9 +722,9 @@ export function ContentModal({ item, onClose }: ContentModalProps) {
 
               {/* Source Link - Prominent visual card for web content */}
               {item.source_type === 'web' && item.source_url && (
-                <div className="mb-6 sm:mb-8">
-                  <LinkShareCard 
-                    url={item.source_url} 
+                <div className="mb-6 sm:mb-8 max-w-[500px]">
+                  <LinkShareCard
+                    url={item.source_url}
                     title={item.title}
                     description={item.description}
                     screenshot={
@@ -800,24 +834,28 @@ export function ContentModal({ item, onClose }: ContentModalProps) {
               {item.source_type === 'twitter' && tweetId && (
                 <div className="mb-6 sm:mb-8">
                   <h3 className="font-mono-ui text-xs uppercase tracking-widest text-[var(--foreground-muted)] mb-3">Original Post</h3>
-                  <div className="rounded-xl overflow-hidden bg-white">
-                    <iframe
-                      src={`https://platform.twitter.com/embed/Tweet.html?id=${tweetId}&theme=light`}
-                      className="w-full min-h-[300px] border-0"
-                      allowFullScreen
-                    />
+                  <div className="max-w-[550px]">
+                    <div className="rounded-xl overflow-hidden bg-white">
+                      <iframe
+                        src={`https://platform.twitter.com/embed/Tweet.html?id=${tweetId}&theme=light`}
+                        className="w-full min-h-[300px] border-0"
+                        allowFullScreen
+                      />
+                    </div>
                   </div>
                 </div>
               )}
               {item.source_type === 'instagram' && instagramEmbedUrl && (
                 <div className="mb-6 sm:mb-8">
                   <h3 className="font-mono-ui text-xs uppercase tracking-widest text-[var(--foreground-muted)] mb-3">Original Post</h3>
-                  <div className="rounded-xl overflow-hidden bg-white">
-                    <iframe
-                      src={instagramEmbedUrl}
-                      className="w-full min-h-[500px] border-0"
-                      allowFullScreen
-                    />
+                  <div className="max-w-[400px]">
+                    <div className="rounded-xl overflow-hidden bg-white">
+                      <iframe
+                        src={instagramEmbedUrl}
+                        className="w-full min-h-[500px] border-0"
+                        allowFullScreen
+                      />
+                    </div>
                   </div>
                 </div>
               )}
@@ -859,12 +897,13 @@ export function ContentModal({ item, onClose }: ContentModalProps) {
             </div>
 
             {/* Right column: Chat interface */}
-            <div className="hidden lg:flex lg:w-1/2 flex-col overflow-hidden border-l border-[var(--panel-border)] bg-[var(--card-bg)]">
-              <div className="flex-1 overflow-hidden p-4">
+            <div className="hidden lg:flex flex-1 flex-col overflow-hidden border-l border-[var(--panel-border)] bg-[var(--card-bg)]">
+              <div className="flex-1 overflow-hidden p-5 lg:p-6">
                 <ItemChat
                   itemId={item.id}
                   itemTitle={item.title || 'Untitled'}
                   itemTopics={item.topics || []}
+                  userTier={userTier}
                 />
               </div>
             </div>
@@ -876,6 +915,7 @@ export function ContentModal({ item, onClose }: ContentModalProps) {
                   itemId={item.id}
                   itemTitle={item.title || 'Untitled'}
                   itemTopics={item.topics || []}
+                  userTier={userTier}
                 />
               </div>
             </div>

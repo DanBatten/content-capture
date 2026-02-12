@@ -9,6 +9,7 @@ const messageDiv = document.getElementById('message');
 const settingsToggle = document.getElementById('settings-toggle');
 const settingsPanel = document.getElementById('settings-panel');
 const apiUrlInput = document.getElementById('api-url');
+const apiKeyInput = document.getElementById('api-key');
 const saveSettingsBtn = document.getElementById('save-settings');
 
 let currentUrl = '';
@@ -17,8 +18,9 @@ let currentTitle = '';
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
   // Load settings
-  const settings = await chrome.storage.sync.get(['apiUrl']);
+  const settings = await chrome.storage.sync.get(['apiUrl', 'apiKey']);
   apiUrlInput.value = settings.apiUrl || DEFAULT_API_URL;
+  apiKeyInput.value = settings.apiKey || '';
 
   // Get current tab info
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -46,15 +48,21 @@ saveBtn.addEventListener('click', async () => {
   hideMessage();
 
   try {
-    const settings = await chrome.storage.sync.get(['apiUrl']);
+    const settings = await chrome.storage.sync.get(['apiUrl', 'apiKey']);
     const apiUrl = settings.apiUrl || DEFAULT_API_URL;
+    const apiKey = settings.apiKey;
     const notes = notesInput.value.trim();
+
+    const headers = {
+      'Content-Type': 'application/json',
+    };
+    if (apiKey) {
+      headers['Authorization'] = `Bearer ${apiKey}`;
+    }
 
     const response = await fetch(`${apiUrl}/api/capture`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({
         url: currentUrl,
         notes: notes || undefined,
@@ -93,13 +101,14 @@ settingsToggle.addEventListener('click', () => {
 // Save settings
 saveSettingsBtn.addEventListener('click', async () => {
   const apiUrl = apiUrlInput.value.trim().replace(/\/$/, ''); // Remove trailing slash
+  const apiKey = apiKeyInput.value.trim();
 
   if (!apiUrl) {
     showMessage('API URL is required', 'error');
     return;
   }
 
-  await chrome.storage.sync.set({ apiUrl });
+  await chrome.storage.sync.set({ apiUrl, apiKey });
   showMessage('Settings saved', 'success');
   settingsPanel.style.display = 'none';
 });

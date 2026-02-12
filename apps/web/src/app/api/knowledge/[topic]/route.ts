@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { requireAuth } from '@/lib/api-auth';
+import { getAuthenticatedUser, unauthorizedResponse, hasScope } from '@/lib/api-auth';
 
 let supabase: SupabaseClient | null = null;
 
@@ -23,9 +23,10 @@ interface TopicParams {
  * Returns details and items for a specific topic
  */
 export async function GET(request: NextRequest, { params }: TopicParams) {
-  // Require authentication for external API calls
-  const authError = requireAuth(request);
-  if (authError) return authError;
+  // Require authentication
+  const auth = await getAuthenticatedUser(request);
+  if (!auth) return unauthorizedResponse();
+  if (!hasScope(auth, 'read')) return unauthorizedResponse('Missing read scope');
 
   try {
     const { topic } = await params;
@@ -39,6 +40,7 @@ export async function GET(request: NextRequest, { params }: TopicParams) {
       )
       .contains('topics', [decodedTopic])
       .eq('status', 'complete')
+      .eq('user_id', auth.userId)
       .order('created_at', { ascending: false })
       .limit(50);
 
@@ -51,6 +53,7 @@ export async function GET(request: NextRequest, { params }: TopicParams) {
       .from('topic_overviews')
       .select('*')
       .eq('topic_name', decodedTopic)
+      .eq('user_id', auth.userId)
       .single();
 
     // Calculate topic stats

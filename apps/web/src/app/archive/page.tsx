@@ -8,6 +8,8 @@ import { ContentModal } from '@/components/ContentModal';
 import { SearchBar } from '@/components/SearchBar';
 import { HeroHeader } from '@/components/HeroHeader';
 import { FolderIcon } from '@/components/FolderIcon';
+import { UserMenu } from '@/components/UserMenu';
+import { useAuth } from '@/components/AuthProvider';
 import type { ContentItem, FiltersData, ItemsResponse } from '@/types/content';
 
 interface SearchIntent {
@@ -26,6 +28,8 @@ interface SearchResponse extends ItemsResponse {
 const ITEMS_PER_PAGE = 24;
 
 export default function ArchivePage() {
+  const { userTier } = useAuth();
+
   // State
   const [items, setItems] = useState<ContentItem[]>([]);
   const [filters, setFilters] = useState<FiltersData | null>(null);
@@ -271,6 +275,7 @@ export default function ArchivePage() {
                     · Updated {latestItemDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                   </span>
                 )}
+                <UserMenu />
               </div>
             </div>
 
@@ -435,6 +440,7 @@ export default function ArchivePage() {
       <ContentModal
         item={selectedItem}
         onClose={() => setSelectedItem(null)}
+        userTier={userTier}
       />
     </div>
   );

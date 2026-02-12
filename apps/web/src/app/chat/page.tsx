@@ -3,8 +3,10 @@
 import Link from 'next/link';
 import { ChatInterface } from '@/components/ChatInterface';
 import { FolderIcon } from '@/components/FolderIcon';
+import { useAuth } from '@/components/AuthProvider';
 
 export default function ChatPage() {
+  const { userTier } = useAuth();
   return (
     <div className="min-h-screen bg-[var(--background)]">
       {/* Header */}
@@ -45,7 +47,7 @@ export default function ChatPage() {
           </p>
         </div>
 
-        <ChatInterface />
+        <ChatInterface userTier={userTier} />
       </main>
 
       {/* Footer */}

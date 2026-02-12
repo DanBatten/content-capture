@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { requireAuth } from '@/lib/api-auth';
+import { getAuthenticatedUser, unauthorizedResponse, hasScope } from '@/lib/api-auth';
 
 let supabase: SupabaseClient | null = null;
 
@@ -26,13 +26,16 @@ interface TopicStat {
  * Returns topic statistics for the Knowledge page
  */
 export async function GET(request: NextRequest) {
-  // Require authentication for external API calls
-  const authError = requireAuth(request);
-  if (authError) return authError;
+  // Require authentication
+  const auth = await getAuthenticatedUser(request);
+  if (!auth) return unauthorizedResponse();
+  if (!hasScope(auth, 'read')) return unauthorizedResponse('Missing read scope');
 
   try {
     // Try to use the database function first
-    const { data: stats, error: statsError } = await getSupabase().rpc('get_topic_stats');
+    const { data: stats, error: statsError } = await getSupabase().rpc('get_topic_stats', {
+      p_user_id: auth.userId,
+    });
 
     let topicStats: TopicStat[] = [];
 
@@ -43,7 +46,8 @@ export async function GET(request: NextRequest) {
       const { data: items, error: itemsError } = await getSupabase()
         .from('content_items')
         .select('topics, images, platform_data, created_at')
-        .eq('status', 'complete');
+        .eq('status', 'complete')
+        .eq('user_id', auth.userId);
 
       if (itemsError) {
         throw itemsError;
@@ -100,7 +104,7 @@ export async function GET(request: NextRequest) {
     const { data: prefs } = await getSupabase()
       .from('user_preferences')
       .select('pinned_topics')
-      .limit(1)
+      .eq('user_id', auth.userId)
       .single();
 
     const pinnedTopics = (prefs?.pinned_topics as string[]) || [];

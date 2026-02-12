@@ -114,6 +114,8 @@ export interface CaptureMessage {
   url: string;
   sourceType: SourceType;
   notes?: string;
+  userId?: string;
+  traceId?: string;
 }
 
 // =============================================================================

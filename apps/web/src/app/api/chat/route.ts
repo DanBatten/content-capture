@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
-import { requireAuth } from '@/lib/api-auth';
+import { getAuthenticatedUser, unauthorizedResponse, hasScope } from '@/lib/api-auth';
+import { checkRateLimit, trackUsage } from '@/lib/rate-limit';
 
 // Lazy-initialized clients to avoid build-time errors
 let supabase: SupabaseClient | null = null;
@@ -127,9 +128,30 @@ Be specific and cite your sources with links. The user has curated this knowledg
  * }
  */
 export async function POST(request: NextRequest) {
-  // Require authentication for external API calls
-  const authError = requireAuth(request);
-  if (authError) return authError;
+  // Authenticate user
+  const auth = await getAuthenticatedUser(request);
+  if (!auth) return unauthorizedResponse();
+
+  // Chat requires 'chat' scope for API keys
+  if (!hasScope(auth, 'chat')) {
+    return NextResponse.json(
+      { error: 'Insufficient scope. Required: chat' },
+      { status: 403 }
+    );
+  }
+
+  // Tier check - chat is Pro only
+  if (auth.tier !== 'pro') {
+    return NextResponse.json(
+      { error: 'UPGRADE_REQUIRED', message: 'Chat requires a Pro subscription' },
+      { status: 403 }
+    );
+  }
+
+  // Rate limit check
+  const rateLimitKey = 'chat';
+  const rateLimitResponse = await checkRateLimit(auth.userId, auth.tier, rateLimitKey);
+  if (rateLimitResponse) return rateLimitResponse;
 
   try {
     const {
@@ -168,13 +190,16 @@ export async function POST(request: NextRequest) {
     let results: Record<string, unknown>[] = [];
     let primaryItem: Record<string, unknown> | null = null;
 
+    const { userId } = auth;
+
     // If itemId is provided, fetch that item first and find both similar items AND semantically relevant items
     if (itemId) {
-      // Fetch the primary item
+      // Fetch the primary item (user-scoped)
       const { data: item, error: itemError } = await getSupabase()
         .from('content_items')
         .select('*')
         .eq('id', itemId)
+        .eq('user_id', userId)
         .single();
 
       if (itemError) {
@@ -188,6 +213,7 @@ export async function POST(request: NextRequest) {
           {
             content_id: itemId,
             match_count: Math.floor(retrievalCount / 2),
+            p_user_id: userId,
           }
         );
 
@@ -203,6 +229,7 @@ export async function POST(request: NextRequest) {
             query_embedding: `[${queryEmbedding.join(',')}]`,
             match_threshold: matchThreshold,
             match_count: Math.floor(retrievalCount / 2),
+            p_user_id: userId,
           }
         );
 
@@ -249,13 +276,14 @@ export async function POST(request: NextRequest) {
         results = filteredResults;
       }
     } else {
-      // Standard semantic search
+      // Standard semantic search (user-scoped)
       const { data: searchResults, error: searchError } = await getSupabase().rpc(
         'search_content_semantic',
         {
           query_embedding: `[${queryEmbedding.join(',')}]`,
           match_threshold: matchThreshold,
           match_count: retrievalCount,
+          p_user_id: userId,
         }
       );
 

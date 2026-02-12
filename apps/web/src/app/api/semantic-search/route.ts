@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
-import { requireAuth } from '@/lib/api-auth';
+import { getAuthenticatedUser, unauthorizedResponse, hasScope } from '@/lib/api-auth';
 
-// Lazy-initialized clients to avoid build-time errors
 let supabase: SupabaseClient | null = null;
 let openai: OpenAI | null = null;
 
@@ -19,22 +18,18 @@ function getSupabase() {
 
 function getOpenAI() {
   if (!openai) {
-    openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY!,
-    });
+    openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
   }
   return openai;
 }
 
-/**
- * Semantic search API using vector embeddings
- * POST /api/semantic-search
- * Body: { query: string, limit?: number, threshold?: number }
- */
 export async function POST(request: NextRequest) {
-  // Require authentication for external API calls
-  const authError = requireAuth(request);
-  if (authError) return authError;
+  const auth = await getAuthenticatedUser(request);
+  if (!auth) return unauthorizedResponse();
+
+  if (!hasScope(auth, 'read')) {
+    return NextResponse.json({ error: 'Insufficient scope. Required: read' }, { status: 403 });
+  }
 
   try {
     const { query, limit = 10, threshold = 0.3 } = await request.json();
@@ -43,7 +38,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Query is required' }, { status: 400 });
     }
 
-    // Generate embedding for the query
     const embeddingResponse = await getOpenAI().embeddings.create({
       model: 'text-embedding-3-small',
       input: query,
@@ -52,11 +46,11 @@ export async function POST(request: NextRequest) {
 
     const queryEmbedding = embeddingResponse.data[0].embedding;
 
-    // Search using pgvector
     const { data, error } = await getSupabase().rpc('search_content_semantic', {
       query_embedding: `[${queryEmbedding.join(',')}]`,
       match_threshold: threshold,
       match_count: limit,
+      p_user_id: auth.userId,
     });
 
     if (error) {

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { TopicCard, TopicCardSmall } from '@/components/TopicCard';
 import { TagSelector } from '@/components/TagSelector';
 import { ChatInterface } from '@/components/ChatInterface';
+import { useAuth } from '@/components/AuthProvider';
 
 interface TopicStat {
   topic_name: string;
@@ -15,6 +16,7 @@ interface TopicStat {
 }
 
 export default function KnowledgePage() {
+  const { userTier } = useAuth();
   const router = useRouter();
   const [topics, setTopics] = useState<TopicStat[]>([]);
   const [pinnedTopics, setPinnedTopics] = useState<string[]>([]);
@@ -225,7 +227,7 @@ export default function KnowledgePage() {
               Chat with Your Entire Archive
             </h2>
             <div className="bg-[var(--panel-bg)] rounded-xl p-6">
-              <ChatInterface />
+              <ChatInterface userTier={userTier} />
             </div>
           </div>
         </section>

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import Anthropic from '@anthropic-ai/sdk';
-import { requireAuth } from '@/lib/api-auth';
+import { getAuthenticatedUser, unauthorizedResponse, hasScope } from '@/lib/api-auth';
 
 let supabase: SupabaseClient | null = null;
 let anthropic: Anthropic | null = null;
@@ -48,9 +48,10 @@ Format your response as JSON:
  * Body: { topic: string, forceRefresh?: boolean }
  */
 export async function POST(request: NextRequest) {
-  // Require authentication for external API calls
-  const authError = requireAuth(request);
-  if (authError) return authError;
+  // Require authentication
+  const auth = await getAuthenticatedUser(request);
+  if (!auth) return unauthorizedResponse();
+  if (!hasScope(auth, 'read')) return unauthorizedResponse('Missing read scope');
 
   try {
     const { topic, forceRefresh = false } = await request.json();
@@ -65,6 +66,7 @@ export async function POST(request: NextRequest) {
         .from('topic_overviews')
         .select('*')
         .eq('topic_name', topic)
+        .eq('user_id', auth.userId)
         .single();
 
       if (cached && cached.generated_at) {
@@ -89,6 +91,7 @@ export async function POST(request: NextRequest) {
       .select('title, summary, body_text, author_name, source_type, topics')
       .contains('topics', [topic])
       .eq('status', 'complete')
+      .eq('user_id', auth.userId)
       .order('created_at', { ascending: false })
       .limit(15);
 
@@ -172,13 +175,14 @@ ${contentSummary}`,
       .upsert(
         {
           topic_name: topic,
+          user_id: auth.userId,
           overview_text: overview,
           suggested_prompts: suggestedPrompts,
           item_count: items.length,
           generated_at: generatedAt,
           updated_at: generatedAt,
         },
-        { onConflict: 'topic_name' }
+        { onConflict: 'topic_name,user_id' }
       );
 
     if (upsertError) {

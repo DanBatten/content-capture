@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { use } from 'react';
 import { KnowledgeOverview } from '@/components/KnowledgeOverview';
 import { ChatInterface } from '@/components/ChatInterface';
+import { useAuth } from '@/components/AuthProvider';
 import { ContentCard } from '@/components/ContentCard';
 import { ContentModal } from '@/components/ContentModal';
 import type { ContentItem } from '@/types/content';
@@ -26,6 +27,7 @@ interface TopicData {
 }
 
 export default function TopicPage({ params }: TopicPageProps) {
+  const { userTier } = useAuth();
   const { topic } = use(params);
   const decodedTopic = decodeURIComponent(topic);
 
@@ -202,6 +204,7 @@ export default function TopicPage({ params }: TopicPageProps) {
             <ChatInterface
               topicFilter={decodedTopic}
               initialPrompt={chatPrompt}
+              userTier={userTier}
             />
           </div>
         </section>
@@ -225,7 +228,7 @@ export default function TopicPage({ params }: TopicPageProps) {
       </div>
 
       {/* Content Modal */}
-      <ContentModal item={selectedItem} onClose={() => setSelectedItem(null)} />
+      <ContentModal item={selectedItem} onClose={() => setSelectedItem(null)} userTier={userTier} />
     </main>
   );
 }

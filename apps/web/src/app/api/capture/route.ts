@@ -7,10 +7,28 @@ import {
 } from '@content-capture/core';
 import { createCapture, captureExists } from '@/lib/supabase';
 import { sendToQueue } from '@/lib/pubsub';
+import { getAuthenticatedUser, unauthorizedResponse, hasScope, checkCsrf } from '@/lib/api-auth';
+import { randomUUID } from 'crypto';
 
 export async function POST(request: NextRequest) {
+  // Authenticate
+  const auth = await getAuthenticatedUser(request);
+  if (!auth) return unauthorizedResponse();
+
+  // Scope check for API key auth
+  if (!hasScope(auth, 'capture')) {
+    return NextResponse.json(
+      { error: 'Insufficient scope. Required: capture' },
+      { status: 403 }
+    );
+  }
+
+  // CSRF check for mutation
+  if (!checkCsrf(request)) {
+    return NextResponse.json({ error: 'CSRF validation failed' }, { status: 403 });
+  }
+
   try {
-    // Parse and validate request body
     const body = await request.json();
     const parsed = captureRequestSchema.safeParse(body);
 
@@ -23,7 +41,6 @@ export async function POST(request: NextRequest) {
 
     const { url, notes } = parsed.data;
 
-    // Validate URL format
     const urlValidation = validateUrl(url);
     if (!urlValidation.valid) {
       return NextResponse.json({ error: urlValidation.error }, { status: 400 });
@@ -31,8 +48,8 @@ export async function POST(request: NextRequest) {
 
     const normalizedUrl = urlValidation.normalized!;
 
-    // Check for duplicates
-    const exists = await captureExists(normalizedUrl);
+    // Per-user duplicate check
+    const exists = await captureExists(normalizedUrl, auth.userId);
     if (exists) {
       return NextResponse.json(
         { error: 'URL already captured', code: 'DUPLICATE' },
@@ -40,11 +57,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Detect source type
     const sourceType = detectSourceType(normalizedUrl);
 
-    // Create pending record in Supabase
-    const capture = await createCapture(normalizedUrl, sourceType, notes);
+    // Create capture with userId
+    const capture = await createCapture(normalizedUrl, sourceType, auth.userId, notes);
     if (!capture) {
       return NextResponse.json(
         { error: 'Failed to create capture record' },
@@ -52,18 +68,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Send to processing queue
+    const traceId = randomUUID();
+
+    // Send to processing queue with userId and traceId
     const message: CaptureMessage = {
       captureId: capture.id,
       url: normalizedUrl,
       sourceType,
       notes,
+      userId: auth.userId,
+      traceId,
     };
 
     const queued = await sendToQueue(message);
     if (!queued) {
-      // Log error but don't fail - record exists, can retry later
+      // Return 503 on queue failure instead of silently succeeding
       console.error('Failed to queue capture:', capture.id);
+      return NextResponse.json(
+        { error: 'Failed to queue for processing. Please retry.' },
+        { status: 503 }
+      );
     }
 
     return NextResponse.json({

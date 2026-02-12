@@ -1,23 +1,36 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getAuthenticatedUser, unauthorizedResponse, hasScope } from '@/lib/api-auth';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const auth = await getAuthenticatedUser(request);
+  if (!auth) return unauthorizedResponse();
+
+  if (!hasScope(auth, 'read')) {
+    return NextResponse.json({ error: 'Insufficient scope. Required: read' }, { status: 403 });
+  }
+
   try {
-    // Get all completed content items
+    const supabase = getSupabase();
+    const { userId } = auth;
+
     const { data: items, error: itemsError } = await supabase
       .from('content_items')
       .select('source_type, topics, disciplines')
+      .eq('user_id', userId)
       .eq('status', 'complete');
 
-    // Get all completed notes
     const { data: notes, error: notesError } = await supabase
       .from('notes')
       .select('topics, disciplines')
+      .eq('user_id', userId)
       .eq('status', 'complete');
 
     if (itemsError) {
@@ -25,26 +38,19 @@ export async function GET() {
       return NextResponse.json({ error: 'Failed to fetch filters' }, { status: 500 });
     }
 
-    // Extract unique source types with counts
     const sourceTypeCounts: Record<string, number> = {};
     const topicCounts: Record<string, number> = {};
     const disciplineCounts: Record<string, number> = {};
 
-    // Process content items
     for (const item of items || []) {
-      // Source types
       if (item.source_type) {
         sourceTypeCounts[item.source_type] = (sourceTypeCounts[item.source_type] || 0) + 1;
       }
-
-      // Topics
       if (item.topics && Array.isArray(item.topics)) {
         for (const topic of item.topics) {
           topicCounts[topic] = (topicCounts[topic] || 0) + 1;
         }
       }
-
-      // Disciplines
       if (item.disciplines && Array.isArray(item.disciplines)) {
         for (const discipline of item.disciplines) {
           disciplineCounts[discipline] = (disciplineCounts[discipline] || 0) + 1;
@@ -52,20 +58,15 @@ export async function GET() {
       }
     }
 
-    // Process notes - add as "note" source type
     const notesCount = notes?.length || 0;
     if (notesCount > 0) {
       sourceTypeCounts['note'] = notesCount;
-
       for (const note of notes || []) {
-        // Topics from notes
         if (note.topics && Array.isArray(note.topics)) {
           for (const topic of note.topics) {
             topicCounts[topic] = (topicCounts[topic] || 0) + 1;
           }
         }
-
-        // Disciplines from notes
         if (note.disciplines && Array.isArray(note.disciplines)) {
           for (const discipline of note.disciplines) {
             disciplineCounts[discipline] = (disciplineCounts[discipline] || 0) + 1;
@@ -74,7 +75,6 @@ export async function GET() {
       }
     }
 
-    // Sort by count and convert to arrays
     const sortByCount = (counts: Record<string, number>) =>
       Object.entries(counts)
         .sort((a, b) => b[1] - a[1])

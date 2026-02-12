@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, FormEvent, KeyboardEvent, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
+import { UpgradePrompt } from './UpgradePrompt';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -21,6 +22,7 @@ interface ItemChatProps {
   itemId: string;
   itemTitle: string;
   itemTopics?: string[];
+  userTier?: 'free' | 'pro';
 }
 
 // Process content to add links to source references
@@ -117,7 +119,7 @@ const MarkdownComponents = {
   },
 };
 
-export function ItemChat({ itemId, itemTitle, itemTopics = [] }: ItemChatProps) {
+export function ItemChat({ itemId, itemTitle, itemTopics = [], userTier }: ItemChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -280,26 +282,32 @@ export function ItemChat({ itemId, itemTitle, itemTopics = [] }: ItemChatProps) 
       </div>
 
       {/* Input area */}
-      <form onSubmit={handleSubmit} className="mt-3 pt-3 border-t border-[var(--panel-border)]">
-        <div className="flex gap-2 items-end">
-          <textarea
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Ask about this content..."
-            rows={1}
-            className="flex-1 bg-transparent border border-[var(--panel-border)] rounded-lg px-3 py-2 font-mono-ui text-sm text-[var(--foreground)] placeholder-[var(--foreground-muted)] outline-none focus:border-[var(--foreground)] transition-colors resize-none"
-          />
-          <button
-            type="submit"
-            disabled={isLoading || !input.trim()}
-            className="px-3 py-2 rounded-lg bg-[var(--foreground)] text-[var(--background)] font-mono-ui text-sm hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
-          >
-            Ask
-          </button>
+      {userTier === 'free' ? (
+        <div className="mt-3 pt-3 border-t border-[var(--panel-border)]">
+          <UpgradePrompt context="item_chat" />
         </div>
-      </form>
+      ) : (
+        <form onSubmit={handleSubmit} className="mt-3 pt-3 border-t border-[var(--panel-border)]">
+          <div className="flex gap-2 items-end">
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Ask about this content..."
+              rows={1}
+              className="flex-1 bg-transparent border border-[var(--panel-border)] rounded-lg px-3 py-2 font-mono-ui text-sm text-[var(--foreground)] placeholder-[var(--foreground-muted)] outline-none focus:border-[var(--foreground)] transition-colors resize-none"
+            />
+            <button
+              type="submit"
+              disabled={isLoading || !input.trim()}
+              className="px-3 py-2 rounded-lg bg-[var(--foreground)] text-[var(--background)] font-mono-ui text-sm hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
+            >
+              Ask
+            </button>
+          </div>
+        </form>
+      )}
     </div>
   );
 }

@@ -1,19 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getAuthenticatedUser, unauthorizedResponse, hasScope, sanitizeFilterValue } from '@/lib/api-auth';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-// GCS bucket for note backgrounds
 const GCS_BUCKET = 'web-scrapbook-content-capture-media';
 
-/**
- * Transform a note row to ContentItem format for UI compatibility
- */
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
+
 function transformNoteToContentItem(note: any) {
-  // Normalize background image path (fix lowercase 'photo' to 'Photo')
   const bgImage = note.background_image
     ? note.background_image.replace(/note-backgrounds\/photo-/i, 'note-backgrounds/Photo-')
     : null;
@@ -56,39 +54,43 @@ function transformNoteToContentItem(note: any) {
 }
 
 export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
+  // Authenticate
+  const auth = await getAuthenticatedUser(request);
+  if (!auth) return unauthorizedResponse();
 
-    // Pagination
+  if (!hasScope(auth, 'read')) {
+    return NextResponse.json({ error: 'Insufficient scope. Required: read' }, { status: 403 });
+  }
+
+  try {
+    const supabase = getSupabase();
+    const { searchParams } = new URL(request.url);
+    const { userId } = auth;
+
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '24');
     const offset = (page - 1) * limit;
 
-    // Filters
     const sourceType = searchParams.get('source_type');
     const topic = searchParams.get('topic');
-    const search = searchParams.get('search');
+    const rawSearch = searchParams.get('search');
+    const search = rawSearch ? sanitizeFilterValue(rawSearch) : null;
     const status = searchParams.get('status') || 'complete';
 
-    // If filtering by notes only, fetch from notes table
+    // Notes-only query
     if (sourceType === 'note') {
       let notesQuery = supabase
         .from('notes')
         .select('*', { count: 'exact' })
+        .eq('user_id', userId)
         .eq('status', status)
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1);
 
-      if (topic) {
-        notesQuery = notesQuery.contains('topics', [topic]);
-      }
-
-      if (search) {
-        notesQuery = notesQuery.or(`title.ilike.%${search}%,cleaned_text.ilike.%${search}%,raw_text.ilike.%${search}%`);
-      }
+      if (topic) notesQuery = notesQuery.contains('topics', [topic]);
+      if (search) notesQuery = notesQuery.or(`title.ilike.%${search}%,cleaned_text.ilike.%${search}%,raw_text.ilike.%${search}%`);
 
       const { data: notes, error, count } = await notesQuery;
-
       if (error) {
         console.error('Notes database error:', error);
         return NextResponse.json({ error: 'Failed to fetch notes' }, { status: 500 });
@@ -103,26 +105,21 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // If filtering by a specific source type (not notes), fetch only from content_items
+    // Specific source type (not notes)
     if (sourceType) {
       let query = supabase
         .from('content_items')
         .select('*', { count: 'exact' })
+        .eq('user_id', userId)
         .eq('status', status)
         .eq('source_type', sourceType)
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1);
 
-      if (topic) {
-        query = query.contains('topics', [topic]);
-      }
-
-      if (search) {
-        query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%,body_text.ilike.%${search}%`);
-      }
+      if (topic) query = query.contains('topics', [topic]);
+      if (search) query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%,body_text.ilike.%${search}%`);
 
       const { data, error, count } = await query;
-
       if (error) {
         console.error('Database error:', error);
         return NextResponse.json({ error: 'Failed to fetch items' }, { status: 500 });
@@ -137,17 +134,18 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // No source type filter - fetch from both tables and merge chronologically
-    // First, get counts from both tables
+    // No source type filter - merge both tables
     let contentQuery = supabase
       .from('content_items')
       .select('*', { count: 'exact' })
+      .eq('user_id', userId)
       .eq('status', status)
       .order('created_at', { ascending: false });
 
     let notesQuery = supabase
       .from('notes')
       .select('*', { count: 'exact' })
+      .eq('user_id', userId)
       .eq('status', status)
       .order('created_at', { ascending: false });
 
@@ -161,34 +159,24 @@ export async function GET(request: NextRequest) {
       notesQuery = notesQuery.or(`title.ilike.%${search}%,cleaned_text.ilike.%${search}%,raw_text.ilike.%${search}%`);
     }
 
-    // Fetch both in parallel
-    const [contentResult, notesResult] = await Promise.all([
-      contentQuery,
-      notesQuery,
-    ]);
+    const [contentResult, notesResult] = await Promise.all([contentQuery, notesQuery]);
 
     if (contentResult.error) {
       console.error('Content items database error:', contentResult.error);
       return NextResponse.json({ error: 'Failed to fetch content items' }, { status: 500 });
     }
-
     if (notesResult.error) {
       console.error('Notes database error:', notesResult.error);
       return NextResponse.json({ error: 'Failed to fetch notes' }, { status: 500 });
     }
 
-    // Transform notes to ContentItem format
     const transformedNotes = (notesResult.data || []).map(transformNoteToContentItem);
     const contentItems = contentResult.data || [];
 
-    // Merge and sort by created_at descending
     const allItems = [...contentItems, ...transformedNotes].sort((a, b) => {
-      const dateA = new Date(a.created_at).getTime();
-      const dateB = new Date(b.created_at).getTime();
-      return dateB - dateA;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
 
-    // Apply pagination to merged results
     const paginatedItems = allItems.slice(offset, offset + limit);
     const totalCount = (contentResult.count || 0) + (notesResult.count || 0);
 

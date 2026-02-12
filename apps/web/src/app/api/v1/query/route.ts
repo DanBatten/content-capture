@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
-import { requireAuth } from '@/lib/api-auth';
+import { getAuthenticatedUser, unauthorizedResponse, hasScope } from '@/lib/api-auth';
 
 // Lazy-initialized clients to avoid build-time errors
 let supabase: SupabaseClient | null = null;
@@ -61,9 +61,10 @@ const DEEP_RESEARCH_SYSTEM = `You are conducting deep research across a personal
 Be thorough but focused. Structure your response clearly.`;
 
 export async function POST(request: NextRequest) {
-  // Require authentication for external API calls
-  const authError = requireAuth(request);
-  if (authError) return authError;
+  // Require authentication
+  const auth = await getAuthenticatedUser(request);
+  if (!auth) return unauthorizedResponse();
+  if (!hasScope(auth, 'read')) return unauthorizedResponse('Missing read scope');
 
   try {
     const body: QueryRequest = await request.json();
@@ -102,6 +103,7 @@ export async function POST(request: NextRequest) {
         query_embedding: `[${queryEmbedding.join(',')}]`,
         match_threshold: matchThreshold,
         match_count: retrievalCount,
+        p_user_id: auth.userId,
       }
     );
 
@@ -209,9 +211,10 @@ Synthesize insights from these sources. Be specific and cite sources when releva
  * GET endpoint for simple queries (useful for testing)
  */
 export async function GET(request: NextRequest) {
-  // Require authentication for external API calls
-  const authError = requireAuth(request);
-  if (authError) return authError;
+  // Require authentication
+  const auth = await getAuthenticatedUser(request);
+  if (!auth) return unauthorizedResponse();
+  if (!hasScope(auth, 'read')) return unauthorizedResponse('Missing read scope');
 
   const { searchParams } = new URL(request.url);
   const query = searchParams.get('q');

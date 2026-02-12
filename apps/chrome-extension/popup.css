@@ -116,6 +116,14 @@ body {
   resize: vertical;
 }
 
+.setting-hint {
+  display: block;
+  font-size: 10px;
+  color: var(--foreground-muted);
+  margin-top: 4px;
+  opacity: 0.7;
+}
+
 .btn-primary {
   width: 100%;
   padding: 12px 16px;

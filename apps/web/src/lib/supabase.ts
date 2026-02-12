@@ -89,6 +89,7 @@ export interface ContentItemRow {
 export async function createCapture(
   url: string,
   sourceType: SourceType,
+  userId: string,
   notes?: string
 ): Promise<{ id: string } | null> {
   const { data, error } = await getSupabaseAdmin()
@@ -96,6 +97,7 @@ export async function createCapture(
     .insert({
       source_url: url,
       source_type: sourceType,
+      user_id: userId,
       status: 'pending' as CaptureStatus,
       captured_at: new Date().toISOString(),
       images: [],
@@ -137,11 +139,12 @@ export async function getCaptureById(id: string): Promise<ContentItemRow | null>
 /**
  * Check if URL already exists
  */
-export async function captureExists(url: string): Promise<boolean> {
+export async function captureExists(url: string, userId: string): Promise<boolean> {
   const { data } = await getSupabaseAdmin()
     .from('content_items')
     .select('id')
     .eq('source_url', url)
+    .eq('user_id', userId)
     .single();
 
   return !!data;

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, FormEvent, KeyboardEvent, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
+import { UpgradePrompt } from './UpgradePrompt';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -138,9 +139,10 @@ const MarkdownComponents = {
 interface ChatInterfaceProps {
   topicFilter?: string;
   initialPrompt?: string;
+  userTier?: 'free' | 'pro';
 }
 
-export function ChatInterface({ topicFilter, initialPrompt }: ChatInterfaceProps = {}) {
+export function ChatInterface({ topicFilter, initialPrompt, userTier }: ChatInterfaceProps = {}) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState(initialPrompt || '');
   const [isLoading, setIsLoading] = useState(false);
@@ -301,76 +303,82 @@ export function ChatInterface({ topicFilter, initialPrompt }: ChatInterfaceProps
       </div>
 
       {/* Input area */}
-      <form onSubmit={handleSubmit} className="mt-4 pt-4 border-t border-[var(--panel-border)]">
-        {/* Deep Research Toggle */}
-        <div className="flex items-center justify-between mb-3">
-          <button
-            type="button"
-            onClick={() => setDeepResearch(!deepResearch)}
-            className={`flex items-center gap-2 font-mono-ui text-xs transition-colors ${
-              deepResearch
-                ? 'text-[var(--accent)]'
-                : 'text-[var(--foreground-muted)] hover:text-[var(--foreground)]'
-            }`}
-          >
-            <span className="w-4 h-4 border rounded flex items-center justify-center">
-              {deepResearch && (
-                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                  <path
-                    fillRule="evenodd"
-                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-              )}
-            </span>
-            <span>Deep Research Mode</span>
-          </button>
-          {deepResearch && (
-            <span className="font-mono-ui text-xs text-[var(--accent)]">
-              Analyzes 20+ sources with comprehensive synthesis
-            </span>
-          )}
+      {userTier === 'free' ? (
+        <div className="mt-4 pt-4 border-t border-[var(--panel-border)]">
+          <UpgradePrompt context="chat" />
         </div>
+      ) : (
+        <form onSubmit={handleSubmit} className="mt-4 pt-4 border-t border-[var(--panel-border)]">
+          {/* Deep Research Toggle */}
+          <div className="flex items-center justify-between mb-3">
+            <button
+              type="button"
+              onClick={() => setDeepResearch(!deepResearch)}
+              className={`flex items-center gap-2 font-mono-ui text-xs transition-colors ${
+                deepResearch
+                  ? 'text-[var(--accent)]'
+                  : 'text-[var(--foreground-muted)] hover:text-[var(--foreground)]'
+              }`}
+            >
+              <span className="w-4 h-4 border rounded flex items-center justify-center">
+                {deepResearch && (
+                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                    <path
+                      fillRule="evenodd"
+                      d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                )}
+              </span>
+              <span>Deep Research Mode</span>
+            </button>
+            {deepResearch && (
+              <span className="font-mono-ui text-xs text-[var(--accent)]">
+                Analyzes 20+ sources with comprehensive synthesis
+              </span>
+            )}
+          </div>
 
-        <div className="flex gap-3 items-end">
-          <textarea
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={
-              deepResearch
-                ? `Ask for deep analysis${topicFilter ? ` about ${topicFilter}` : ''}...`
-                : topicFilter
-                  ? `Ask about ${topicFilter}...`
-                  : 'Ask about your saved content...'
-            }
-            rows={1}
-            className={`flex-1 bg-transparent border rounded-lg px-4 py-3 font-mono-ui text-sm text-[var(--foreground)] placeholder-[var(--foreground-muted)] outline-none transition-colors resize-none ${
-              deepResearch
-                ? 'border-[var(--accent)] focus:border-[var(--accent)]'
-                : 'border-[var(--panel-border)] focus:border-[var(--foreground)]'
-            }`}
-          />
-          <button
-            type="submit"
-            disabled={isLoading || !input.trim()}
-            className={`px-4 py-3 rounded-lg font-mono-ui text-sm hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity ${
-              deepResearch
-                ? 'bg-[var(--accent)] text-white'
-                : 'bg-[var(--foreground)] text-[var(--background)]'
-            }`}
-          >
-            {deepResearch ? 'Research' : 'Send'}
-          </button>
-        </div>
-        <p className="mt-2 font-mono-ui text-xs text-[var(--foreground-muted)]">
-          {deepResearch
-            ? 'Deep research takes longer but provides comprehensive analysis'
-            : 'Press Enter to send, Shift+Enter for new line'}
-        </p>
-      </form>
+          <div className="flex gap-3 items-end">
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={
+                deepResearch
+                  ? `Ask for deep analysis${topicFilter ? ` about ${topicFilter}` : ''}...`
+                  : topicFilter
+                    ? `Ask about ${topicFilter}...`
+                    : 'Ask about your saved content...'
+              }
+              rows={1}
+              className={`flex-1 bg-transparent border rounded-lg px-4 py-3 font-mono-ui text-sm text-[var(--foreground)] placeholder-[var(--foreground-muted)] outline-none transition-colors resize-none ${
+                deepResearch
+                  ? 'border-[var(--accent)] focus:border-[var(--accent)]'
+                  : 'border-[var(--panel-border)] focus:border-[var(--foreground)]'
+              }`}
+            />
+            <button
+              type="submit"
+              disabled={isLoading || !input.trim()}
+              className={`px-4 py-3 rounded-lg font-mono-ui text-sm hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity ${
+                deepResearch
+                  ? 'bg-[var(--accent)] text-white'
+                  : 'bg-[var(--foreground)] text-[var(--background)]'
+              }`}
+            >
+              {deepResearch ? 'Research' : 'Send'}
+            </button>
+          </div>
+          <p className="mt-2 font-mono-ui text-xs text-[var(--foreground-muted)]">
+            {deepResearch
+              ? 'Deep research takes longer but provides comprehensive analysis'
+              : 'Press Enter to send, Shift+Enter for new line'}
+          </p>
+        </form>
+      )}
     </div>
   );
 }

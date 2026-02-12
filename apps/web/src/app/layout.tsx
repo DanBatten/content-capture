@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Fraunces, Work_Sans } from "next/font/google";
+import { AuthProvider } from "@/components/AuthProvider";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -49,7 +50,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${fraunces.variable} ${workSans.variable}`}>
-        {children}
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );
