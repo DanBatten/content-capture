@@ -184,6 +184,9 @@ export function checkCsrf(request: NextRequest): boolean {
   const origin = request.headers.get('origin');
   if (!origin) return true; // Non-browser requests (API keys) don't send Origin
 
+  // Chrome extensions use their own origin - CSRF doesn't apply to API key auth
+  if (origin.startsWith('chrome-extension://')) return true;
+
   const allowedOrigins = [
     'https://archivvve.com',
     'https://www.archivvve.com',
