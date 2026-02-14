@@ -13,27 +13,11 @@ CREATE INDEX IF NOT EXISTS idx_content_items_user_created
 
 -- Drop existing unique constraint on source_url (if it exists)
 -- and replace with per-user unique constraint so two users can save the same URL
+-- Must drop the constraint first (not the index) since Postgres enforces unique
+-- constraints via an index that cannot be dropped independently.
 DO $$
 BEGIN
-  -- Drop any existing unique constraint/index on source_url alone
-  IF EXISTS (
-    SELECT 1 FROM pg_indexes
-    WHERE tablename = 'content_items'
-    AND indexdef LIKE '%UNIQUE%source_url%'
-    AND indexdef NOT LIKE '%user_id%'
-  ) THEN
-    -- Find and drop the constraint
-    EXECUTE (
-      SELECT 'DROP INDEX IF EXISTS ' || indexname
-      FROM pg_indexes
-      WHERE tablename = 'content_items'
-      AND indexdef LIKE '%UNIQUE%source_url%'
-      AND indexdef NOT LIKE '%user_id%'
-      LIMIT 1
-    );
-  END IF;
-
-  -- Also drop named constraints
+  -- Drop named constraint first (this also removes the backing index)
   IF EXISTS (
     SELECT 1 FROM information_schema.table_constraints
     WHERE table_name = 'content_items'
@@ -46,6 +30,21 @@ BEGIN
       WHERE table_name = 'content_items'
       AND constraint_type = 'UNIQUE'
       AND constraint_name LIKE '%source_url%'
+      LIMIT 1
+    );
+  -- Fallback: drop standalone unique index (not backing a constraint)
+  ELSIF EXISTS (
+    SELECT 1 FROM pg_indexes
+    WHERE tablename = 'content_items'
+    AND indexdef LIKE '%UNIQUE%source_url%'
+    AND indexdef NOT LIKE '%user_id%'
+  ) THEN
+    EXECUTE (
+      SELECT 'DROP INDEX IF EXISTS ' || indexname
+      FROM pg_indexes
+      WHERE tablename = 'content_items'
+      AND indexdef LIKE '%UNIQUE%source_url%'
+      AND indexdef NOT LIKE '%user_id%'
       LIMIT 1
     );
   END IF;

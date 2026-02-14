@@ -1,6 +1,17 @@
 -- Migration 005: User-scoped search functions
 -- Updates all search functions to accept p_user_id parameter
 -- Service role key bypasses RLS, so we filter explicitly in functions
+-- Must DROP old signatures first since adding a parameter creates a new overload
+
+BEGIN;
+
+-- ============================================================
+-- Drop old function signatures (exact original param lists)
+-- ============================================================
+DROP FUNCTION IF EXISTS search_content_semantic(vector(1536), FLOAT, INT);
+DROP FUNCTION IF EXISTS get_similar_content(UUID, INT);
+DROP FUNCTION IF EXISTS search_content_semantic_filtered(vector(1536), FLOAT, INT, TEXT);
+DROP FUNCTION IF EXISTS get_topic_stats();
 
 -- ============================================================
 -- search_content_semantic - with user scoping
@@ -139,7 +150,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-COMMENT ON FUNCTION search_content_semantic IS 'Semantic search with optional user scoping';
-COMMENT ON FUNCTION get_similar_content IS 'Find similar content with optional user scoping';
-COMMENT ON FUNCTION search_content_semantic_filtered IS 'Semantic search with topic filter and optional user scoping';
-COMMENT ON FUNCTION get_topic_stats IS 'Topic statistics with optional user scoping';
+COMMIT;
+
+COMMENT ON FUNCTION search_content_semantic(vector(1536), FLOAT, INT, UUID) IS 'Semantic search with optional user scoping';
+COMMENT ON FUNCTION get_similar_content(UUID, INT, UUID) IS 'Find similar content with optional user scoping';
+COMMENT ON FUNCTION search_content_semantic_filtered(vector(1536), FLOAT, INT, TEXT, UUID) IS 'Semantic search with topic filter and optional user scoping';
+COMMENT ON FUNCTION get_topic_stats(UUID) IS 'Topic statistics with optional user scoping';
