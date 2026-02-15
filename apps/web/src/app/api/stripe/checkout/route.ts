@@ -43,12 +43,22 @@ export async function POST(request: NextRequest) {
       .eq('id', auth.userId);
   }
 
+  // Determine which plan to checkout
+  let body: { plan?: string } = {};
+  try {
+    body = await request.json();
+  } catch {
+    // Default to pro if no body
+  }
+  const planKey = body.plan === 'basic' ? 'basic' : 'pro';
+  const plan = PLANS[planKey];
+
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
   const session = await stripe.checkout.sessions.create({
     customer: customerId,
     mode: 'subscription',
-    line_items: [{ price: PLANS.pro.priceId, quantity: 1 }],
+    line_items: [{ price: plan.priceId, quantity: 1 }],
     success_url: `${appUrl}/settings?checkout=success`,
     cancel_url: `${appUrl}/settings?checkout=cancelled`,
     metadata: { supabase_user_id: auth.userId },

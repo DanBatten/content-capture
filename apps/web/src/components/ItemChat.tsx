@@ -22,7 +22,7 @@ interface ItemChatProps {
   itemId: string;
   itemTitle: string;
   itemTopics?: string[];
-  userTier?: 'free' | 'pro';
+  userTier?: 'free' | 'basic' | 'pro';
 }
 
 // Process content to add links to source references

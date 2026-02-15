@@ -139,7 +139,7 @@ const MarkdownComponents = {
 interface ChatInterfaceProps {
   topicFilter?: string;
   initialPrompt?: string;
-  userTier?: 'free' | 'pro';
+  userTier?: 'free' | 'basic' | 'pro';
 }
 
 export function ChatInterface({ topicFilter, initialPrompt, userTier }: ChatInterfaceProps = {}) {

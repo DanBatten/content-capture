@@ -17,8 +17,21 @@ export function getStripeServer() {
 }
 
 export const PLANS = {
+  basic: {
+    name: 'Basic',
+    priceId: process.env.STRIPE_BASIC_PRICE_ID!,
+  },
   pro: {
-    name: 'Archive Pro',
+    name: 'Pro',
     priceId: process.env.STRIPE_PRO_PRICE_ID!,
   },
 } as const;
+
+/**
+ * Determine tier from a Stripe price ID.
+ */
+export function tierFromPriceId(priceId: string): 'basic' | 'pro' | 'free' {
+  if (priceId === PLANS.pro.priceId) return 'pro';
+  if (priceId === PLANS.basic.priceId) return 'basic';
+  return 'free';
+}

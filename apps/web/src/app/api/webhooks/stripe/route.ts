@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
+import { tierFromPriceId } from '@/lib/stripe';
 
 function getAdminClient() {
   return createClient(
@@ -72,10 +73,14 @@ export async function POST(request: NextRequest) {
             session.subscription as string
           );
 
+          const priceId = subscription.items?.data?.[0]?.price?.id;
+          const tier = priceId ? tierFromPriceId(priceId) : 'basic';
+          const resolvedTier = tier === 'free' ? 'basic' : tier;
+
           await admin
             .from('user_profiles')
             .update({
-              tier: 'pro',
+              tier: resolvedTier,
               stripe_customer_id: customerId,
               stripe_subscription_id: subscription.id,
               stripe_subscription_status: subscription.status,
@@ -102,11 +107,17 @@ export async function POST(request: NextRequest) {
         }
 
         const isActive = ['active', 'trialing'].includes(currentSub.status);
+        let subTier: 'free' | 'basic' | 'pro' = 'free';
+        if (isActive) {
+          const priceId = currentSub.items?.data?.[0]?.price?.id;
+          subTier = priceId ? tierFromPriceId(priceId) : 'basic';
+          if (subTier === 'free') subTier = 'basic'; // Active sub is at least basic
+        }
 
         await admin
           .from('user_profiles')
           .update({
-            tier: isActive ? 'pro' : 'free',
+            tier: subTier,
             stripe_subscription_id: currentSub.id,
             stripe_subscription_status: currentSub.status,
             subscription_current_period_end: getPeriodEndISO(currentSub),

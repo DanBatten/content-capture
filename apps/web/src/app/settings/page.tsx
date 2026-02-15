@@ -70,10 +70,14 @@ function SettingsContent() {
     }
   }
 
-  async function handleUpgrade() {
+  async function handleUpgrade(plan: 'basic' | 'pro' = 'pro') {
     setIsCheckoutLoading(true);
     try {
-      const res = await fetch('/api/stripe/checkout', { method: 'POST' });
+      const res = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan }),
+      });
       const data = await res.json();
       if (data.url) {
         window.location.href = data.url;
@@ -216,14 +220,16 @@ function SettingsContent() {
               <div>
                 <p className="font-medium text-[var(--foreground)]">
                   Current Plan:{' '}
-                  <span className={userTier === 'pro' ? 'text-[var(--accent)]' : ''}>
-                    {userTier === 'pro' ? 'Pro' : 'Free'}
+                  <span className={userTier !== 'free' ? 'text-[var(--accent)]' : ''}>
+                    {userTier === 'pro' ? 'Pro' : userTier === 'basic' ? 'Basic' : 'Free'}
                   </span>
                 </p>
                 <p className="text-sm text-[var(--foreground-muted)] mt-1">
                   {userTier === 'pro'
                     ? 'Full access to chat, deep research, and all features.'
-                    : 'Upgrade to Pro for AI chat, deep research, and more.'}
+                    : userTier === 'basic'
+                    ? 'Save and search your archive. Upgrade to Pro for AI chat and research.'
+                    : 'Upgrade for full archive access, AI chat, and more.'}
                 </p>
               </div>
             </div>
@@ -237,14 +243,40 @@ function SettingsContent() {
                 >
                   {isPortalLoading ? 'Loading...' : 'Manage Billing'}
                 </button>
+              ) : userTier === 'basic' ? (
+                <>
+                  <button
+                    onClick={() => handleUpgrade('pro')}
+                    disabled={isCheckoutLoading}
+                    className="px-4 py-2 rounded-lg bg-[var(--foreground)] text-[var(--background)] font-mono-ui text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+                  >
+                    {isCheckoutLoading ? 'Loading...' : 'Upgrade to Pro — $16/mo'}
+                  </button>
+                  <button
+                    onClick={handleManageBilling}
+                    disabled={isPortalLoading}
+                    className="px-4 py-2 rounded-lg border border-[var(--panel-border)] font-mono-ui text-sm text-[var(--foreground)] hover:border-[var(--foreground)] transition-colors disabled:opacity-50"
+                  >
+                    {isPortalLoading ? 'Loading...' : 'Manage Billing'}
+                  </button>
+                </>
               ) : (
-                <button
-                  onClick={handleUpgrade}
-                  disabled={isCheckoutLoading}
-                  className="px-4 py-2 rounded-lg bg-[var(--foreground)] text-[var(--background)] font-mono-ui text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
-                >
-                  {isCheckoutLoading ? 'Loading...' : 'Upgrade to Pro'}
-                </button>
+                <>
+                  <button
+                    onClick={() => handleUpgrade('basic')}
+                    disabled={isCheckoutLoading}
+                    className="px-4 py-2 rounded-lg border border-[var(--foreground)] font-mono-ui text-sm text-[var(--foreground)] hover:opacity-90 transition-opacity disabled:opacity-50"
+                  >
+                    {isCheckoutLoading ? 'Loading...' : 'Basic — $6/mo'}
+                  </button>
+                  <button
+                    onClick={() => handleUpgrade('pro')}
+                    disabled={isCheckoutLoading}
+                    className="px-4 py-2 rounded-lg bg-[var(--foreground)] text-[var(--background)] font-mono-ui text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+                  >
+                    {isCheckoutLoading ? 'Loading...' : 'Pro — $16/mo'}
+                  </button>
+                </>
               )}
 
               <button

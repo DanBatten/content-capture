@@ -8,7 +8,7 @@ export type AuthMethod = 'session' | 'api_key' | 'legacy';
 export interface AuthenticatedUser {
   userId: string;
   authMethod: AuthMethod;
-  tier: 'free' | 'pro';
+  tier: 'free' | 'basic' | 'pro';
   scopes?: string[];
 }
 
@@ -152,7 +152,7 @@ export function hasScope(auth: AuthenticatedUser, scope: string): boolean {
  */
 async function getUserTierFromProfile(
   userId: string
-): Promise<'free' | 'pro'> {
+): Promise<'free' | 'basic' | 'pro'> {
   try {
     const admin = getAdminClient();
     const { data } = await admin
@@ -161,16 +161,16 @@ async function getUserTierFromProfile(
       .eq('id', userId)
       .single();
 
-    if (!data || data.tier !== 'pro') return 'free';
+    if (!data || !data.tier || data.tier === 'free') return 'free';
 
-    // Verify subscription is active and not expired
+    // Verify subscription is active and not expired (for paid tiers)
     const status = data.stripe_subscription_status;
     if (status && !['active', 'trialing'].includes(status)) return 'free';
 
     const periodEnd = data.subscription_current_period_end;
     if (periodEnd && new Date(periodEnd) < new Date()) return 'free';
 
-    return 'pro';
+    return data.tier as 'basic' | 'pro';
   } catch {
     return 'free';
   }

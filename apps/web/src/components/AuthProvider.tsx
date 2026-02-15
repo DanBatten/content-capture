@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useState, useCallback } from 'rea
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser';
 import type { User, Session } from '@supabase/supabase-js';
 
-export type UserTier = 'free' | 'pro';
+export type UserTier = 'free' | 'basic' | 'pro';
 
 interface AuthContextType {
   user: User | null;
@@ -44,8 +44,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .eq('id', userId)
         .single();
 
-      if (data?.tier === 'pro') {
-        setUserTier('pro');
+      if (data?.tier === 'pro' || data?.tier === 'basic') {
+        setUserTier(data.tier);
       } else {
         setUserTier('free');
       }

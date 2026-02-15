@@ -10,7 +10,7 @@ const RAW_CONTENT_CHAR_LIMIT = 300;
 interface ContentModalProps {
   item: ContentItem | null;
   onClose: () => void;
-  userTier?: 'free' | 'pro';
+  userTier?: 'free' | 'basic' | 'pro';
 }
 
 const sourceColors: Record<string, string> = {

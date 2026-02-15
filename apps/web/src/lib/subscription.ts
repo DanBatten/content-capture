@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
+import { tierFromPriceId } from './stripe';
 
 function getAdminClient() {
   return createClient(
@@ -26,7 +27,7 @@ function getSubscriptionPeriodEnd(sub: Stripe.Subscription): number | null {
 /**
  * Get user tier from profile, validating subscription is active.
  */
-export async function getUserTier(userId: string): Promise<'free' | 'pro'> {
+export async function getUserTier(userId: string): Promise<'free' | 'basic' | 'pro'> {
   const admin = getAdminClient();
   const { data } = await admin
     .from('user_profiles')
@@ -34,7 +35,7 @@ export async function getUserTier(userId: string): Promise<'free' | 'pro'> {
     .eq('id', userId)
     .single();
 
-  if (!data || data.tier !== 'pro') return 'free';
+  if (!data || data.tier === 'free' || !data.tier) return 'free';
 
   const status = data.stripe_subscription_status;
   if (status && !['active', 'trialing'].includes(status)) return 'free';
@@ -42,14 +43,14 @@ export async function getUserTier(userId: string): Promise<'free' | 'pro'> {
   const periodEnd = data.subscription_current_period_end;
   if (periodEnd && new Date(periodEnd) < new Date()) return 'free';
 
-  return 'pro';
+  return data.tier as 'basic' | 'pro';
 }
 
 /**
  * Sync subscription state from Stripe API into local DB.
  * Called on 403 "refresh" requests and by reconciliation.
  */
-export async function syncSubscriptionFromStripe(userId: string): Promise<'free' | 'pro'> {
+export async function syncSubscriptionFromStripe(userId: string): Promise<'free' | 'basic' | 'pro'> {
   const admin = getAdminClient();
   const stripe = getStripe();
 
@@ -91,11 +92,15 @@ export async function syncSubscriptionFromStripe(userId: string): Promise<'free'
     return 'free';
   }
 
-  // Active subscription - update to pro
+  // Active subscription - determine tier from price
+  const priceId = sub.items?.data?.[0]?.price?.id;
+  const tier = priceId ? tierFromPriceId(priceId) : 'basic';
+  const resolvedTier = tier === 'free' ? 'basic' : tier; // Active sub is at least basic
+
   await admin
     .from('user_profiles')
     .update({
-      tier: 'pro',
+      tier: resolvedTier,
       stripe_subscription_id: sub.id,
       stripe_subscription_status: sub.status,
       subscription_current_period_end: (() => { const pe = getSubscriptionPeriodEnd(sub); return pe ? new Date(pe * 1000).toISOString() : null; })(),
@@ -103,5 +108,5 @@ export async function syncSubscriptionFromStripe(userId: string): Promise<'free'
     })
     .eq('id', userId);
 
-  return 'pro';
+  return resolvedTier;
 }
