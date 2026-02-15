@@ -45,10 +45,13 @@ function SettingsContent() {
     const checkout = searchParams.get('checkout');
     const sync = searchParams.get('sync');
 
-    if (checkout === 'success') {
-      setSyncMessage('Payment successful! Your account is being upgraded...');
-      handleSync();
-    } else if (sync === 'true') {
+    if (checkout === 'success' || sync === 'true') {
+      // Clear params from URL immediately to prevent reload loop
+      window.history.replaceState({}, '', '/settings');
+
+      if (checkout === 'success') {
+        setSyncMessage('Payment successful! Your account is being upgraded...');
+      }
       handleSync();
     }
   }, [searchParams]);
